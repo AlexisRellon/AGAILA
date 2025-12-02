@@ -162,9 +162,9 @@ export default function Register() {
             disabled={loading}
           >
             {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Creating account...
+              <span className="flex items-center gap-2" role="status" aria-live="polite">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
+                <span>Creating account...</span>
               </span>
             ) : (
               'Create Account'

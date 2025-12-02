@@ -544,13 +544,13 @@ const CitizenReportForm: React.FC = () => {
                 className="flex items-center gap-2 px-6 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Submitting...
-                  </>
+                  <span className="flex items-center gap-2" role="status" aria-live="polite">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                    <span>Submitting...</span>
+                  </span>
                 ) : (
                   <>
-                    <Send size={16} />
+                    <Send size={16} aria-hidden="true" />
                     Submit Report
                   </>
                 )}

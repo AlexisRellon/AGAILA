@@ -6,8 +6,10 @@ import './App.css';
 import { Toaster } from './components/ui/sonner';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { SkipLink } from './components/SkipLink';
 import { queryClient } from './lib/queryClient';
 import { useRealtimeNotifications } from './hooks/useRealtimeNotifications';
+import { useDocumentTitle } from './hooks/useDocumentTitle';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
@@ -18,6 +20,14 @@ import CitizenReportForm from './pages/CitizenReportForm';
 import ReportConfirmation from './pages/ReportConfirmation';
 import ReportTracking from './pages/ReportTracking';
 import StatusPage from './pages/StatusPage';
+
+/**
+ * Component that applies document title based on route
+ */
+function DocumentTitleManager() {
+  useDocumentTitle();
+  return null;
+}
 
 /**
  * Main App component with realtime notifications
@@ -34,7 +44,9 @@ function AppContent() {
         v7_relativeSplatPath: true,
       }}
     >
-      <div className="min-h-screen bg-background">
+      <DocumentTitleManager />
+      <SkipLink />
+      <main id="main-content" className="min-h-screen bg-background">
         <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/map" element={<PublicMap />} />
@@ -76,7 +88,7 @@ function AppContent() {
             } />
           </Routes>
           <Toaster />
-        </div>
+        </main>
       </Router>
   );
 }

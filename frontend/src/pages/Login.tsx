@@ -155,9 +155,9 @@ export default function Login() {
             disabled={loading}
           >
             {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Logging in...
+              <span className="flex items-center gap-2" role="status" aria-live="polite">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
+                <span>Logging in...</span>
               </span>
             ) : (
               'Login'

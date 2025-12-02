@@ -32,11 +32,16 @@ const Alert = React.forwardRef<
 ))
 Alert.displayName = "Alert"
 
+interface AlertTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  /** Semantic heading level (h2-h6). Defaults to h3 for proper hierarchy. */
+  as?: 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+}
+
 const AlertTitle = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h5
+  HTMLHeadingElement,
+  AlertTitleProps
+>(({ className, as: Component = 'h3', ...props }, ref) => (
+  <Component
     ref={ref}
     className={cn("mb-1 font-medium leading-none tracking-tight", className)}
     {...props}

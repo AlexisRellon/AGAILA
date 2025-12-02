@@ -68,10 +68,11 @@ export function MapControls({
           {/* Clustering Toggle */}
           <div className="flex items-center justify-between gap-3" data-tour="cluster-section">
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-slate-600" />
-              <span className="text-sm font-medium">Clustering</span>
+              <Layers className="w-4 h-4 text-slate-600" aria-hidden="true" />
+              <span id="clustering-label" className="text-sm font-medium">Clustering</span>
             </div>
             <button
+              type="button"
               data-tour="cluster-toggle"
               onClick={() => onToggleClustering(!clusteringEnabled)}
               className={`
@@ -81,6 +82,7 @@ export function MapControls({
               `}
               role="switch"
               aria-checked={clusteringEnabled}
+              aria-labelledby="clustering-label"
             >
               <span
                 className={`
@@ -94,8 +96,8 @@ export function MapControls({
           {/* Heatmap Toggle */}
           <div className="flex items-center justify-between gap-3" data-tour="heatmap-section">
             <div className="flex items-center gap-2">
-              <MapIcon className="w-4 h-4 text-slate-600" />
-              <span className="text-sm font-medium">Heatmap</span>
+              <MapIcon className="w-4 h-4 text-slate-600" aria-hidden="true" />
+              <span id="heatmap-label" className="text-sm font-medium">Heatmap</span>
               {isHeatmapAutoDisabled && (
                 <Badge variant="secondary" className="text-xs">
                   Zoom out
@@ -103,6 +105,7 @@ export function MapControls({
               )}
             </div>
             <button
+              type="button"
               data-tour="heatmap-toggle"
               onClick={() => onToggleHeatmap(!heatmapEnabled)}
               disabled={isHeatmapAutoDisabled}
@@ -114,6 +117,7 @@ export function MapControls({
               `}
               role="switch"
               aria-checked={heatmapEnabled && !isHeatmapAutoDisabled}
+              aria-labelledby="heatmap-label"
             >
               <span
                 className={`
@@ -133,68 +137,83 @@ export function MapControls({
 
           {/* Settings Button */}
           <button
+            type="button"
             onClick={() => setShowSettings(!showSettings)}
             className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors mt-1"
             data-tour="heatmap-settings"
+            aria-expanded={showSettings}
+            aria-controls="heatmap-settings-panel"
           >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
+            <Settings className="w-4 h-4" aria-hidden="true" />
+            <span>{showSettings ? 'Hide Settings' : 'Settings'}</span>
           </button>
         </div>
       </Card>
 
       {/* Settings Panel */}
       {showSettings && (
-        <Card className="p-4 bg-white shadow-lg min-w-[240px]">
+        <Card id="heatmap-settings-panel" className="p-4 bg-white shadow-lg min-w-[240px]">
           <h3 className="text-sm font-semibold mb-3">Heatmap Settings</h3>
           <div className="flex flex-col gap-3 text-sm">
             <div>
-              <label className="block text-slate-600 mb-1">
+              <label htmlFor="heatmap-radius" className="block text-slate-600 mb-1">
                 Radius: <span className="font-semibold">{localRadius}px</span>
               </label>
               <input
+                id="heatmap-radius"
                 type="range"
                 min="10"
                 max="50"
                 value={localRadius}
                 onChange={(e) => handleRadiusChange(Number(e.target.value))}
                 className="w-full accent-blue-600"
+                aria-valuenow={localRadius}
+                aria-valuemin={10}
+                aria-valuemax={50}
               />
-              <div className="flex justify-between text-xs text-slate-400 mt-1">
+              <div className="flex justify-between text-xs text-slate-400 mt-1" aria-hidden="true">
                 <span>10px</span>
                 <span>50px</span>
               </div>
             </div>
             <div>
-              <label className="block text-slate-600 mb-1">
+              <label htmlFor="heatmap-blur" className="block text-slate-600 mb-1">
                 Blur: <span className="font-semibold">{localBlur}px</span>
               </label>
               <input
+                id="heatmap-blur"
                 type="range"
                 min="5"
                 max="30"
                 value={localBlur}
                 onChange={(e) => handleBlurChange(Number(e.target.value))}
                 className="w-full accent-blue-600"
+                aria-valuenow={localBlur}
+                aria-valuemin={5}
+                aria-valuemax={30}
               />
-              <div className="flex justify-between text-xs text-slate-400 mt-1">
+              <div className="flex justify-between text-xs text-slate-400 mt-1" aria-hidden="true">
                 <span>5px</span>
                 <span>30px</span>
               </div>
             </div>
             <div>
-              <label className="block text-slate-600 mb-1">
+              <label htmlFor="heatmap-maxzoom" className="block text-slate-600 mb-1">
                 Max Zoom Level: <span className="font-semibold">{localMaxZoom}</span>
               </label>
               <input
+                id="heatmap-maxzoom"
                 type="range"
                 min="8"
                 max="15"
                 value={localMaxZoom}
                 onChange={(e) => handleMaxZoomChange(Number(e.target.value))}
                 className="w-full accent-blue-600"
+                aria-valuenow={localMaxZoom}
+                aria-valuemin={8}
+                aria-valuemax={15}
               />
-              <div className="flex justify-between text-xs text-slate-400 mt-1">
+              <div className="flex justify-between text-xs text-slate-400 mt-1" aria-hidden="true">
                 <span>8</span>
                 <span>15</span>
               </div>
@@ -204,6 +223,7 @@ export function MapControls({
                 Changes apply immediately. Settings persist in browser storage.
               </p>
               <button
+                type="button"
                 onClick={() => setShowSettings(false)}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >

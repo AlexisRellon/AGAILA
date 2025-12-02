@@ -5,12 +5,13 @@ export const HeroSection: React.FC = () => {
   return (
     <section className="relative bg-white min-h-[70vh] md:min-h-[calc(100vh-101px)] overflow-hidden w-full flex items-center justify-center">
       {/* Full-Width Background Container - Covers entire viewport */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none" aria-hidden="true">
         {/* Combined Background: Grid Plane + Heatmap Overlay - Centered and extending beyond viewport */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <img
             src={landingAssets.hero.background}
             alt=""
+            aria-hidden="true"
             className="w-auto h-auto min-w-[100vw] min-h-[500px] sm:min-h-[650px] md:min-h-[750px] object-cover"
           />
         </div>
@@ -27,6 +28,7 @@ export const HeroSection: React.FC = () => {
             <img
               src={landingAssets.hero.pinVolcano}
               alt=""
+              aria-hidden="true"
               className="w-full h-full"
             />
           </div>
@@ -38,6 +40,7 @@ export const HeroSection: React.FC = () => {
             <img
               src={landingAssets.hero.pinFlood}
               alt=""
+              aria-hidden="true"
               className="w-full h-full"
             />
           </div>
@@ -49,6 +52,7 @@ export const HeroSection: React.FC = () => {
             <img
               src={landingAssets.hero.pinEarthquake}
               alt=""
+              aria-hidden="true"
               className="w-full h-full"
             />
           </div>
@@ -60,6 +64,7 @@ export const HeroSection: React.FC = () => {
             <img
               src={landingAssets.hero.pinLandslide}
               alt=""
+              aria-hidden="true"
               className="w-full h-full"
             />
           </div>
@@ -73,12 +78,14 @@ export const HeroSection: React.FC = () => {
 
           <div className="flex flex-wrap gap-[12px] sm:gap-[16px] items-center justify-center">
             <button
+              type="button"
               className="bg-[#0a2a4d] text-white hover:bg-[#0a2a4d]/90 px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors"
               onClick={() => window.location.assign("/map")}
             >
               View Live Hazard Map
             </button>
             <button
+              type="button"
               className="border border-[#005a9c] border-solid text-[#005a9c] hover:bg-[#005a9c] hover:text-white px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors"
               onClick={() => {
                 document

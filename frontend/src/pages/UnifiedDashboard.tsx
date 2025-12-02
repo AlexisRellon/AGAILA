@@ -217,8 +217,14 @@ export default function UnifiedDashboard() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div 
+        className="flex items-center justify-center h-screen"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" aria-hidden="true"></div>
+        <span className="sr-only">Loading dashboard...</span>
       </div>
     );
   }
