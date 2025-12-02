@@ -429,12 +429,24 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.command == "generate-key":
-        print(f"New encryption key: {generate_encryption_key()}")
-        print(f"Add to environment: export {ENCRYPTION_KEY_ENV}=<key>")
+        # CodeQL Fix: Write key to file instead of stdout to avoid clear-text logging
+        key = generate_encryption_key()
+        key_file = ".gaia_encryption_key.tmp"
+        with open(key_file, "w") as f:
+            f.write(f"export GAIA_ENCRYPTION_KEY={key}\n")
+        print(f"✓ New encryption key generated and saved to: {key_file}")
+        print(f"  Run: source {key_file} && rm {key_file}")
+        print(f"  Or copy the value from the file to your .env")
     
     elif args.command == "generate-salt":
-        print(f"New salt: {generate_salt()}")
-        print(f"Add to environment: export {ENCRYPTION_SALT_ENV}=<salt>")
+        # CodeQL Fix: Write salt to file instead of stdout to avoid clear-text logging
+        salt = generate_salt()
+        salt_file = ".gaia_encryption_salt.tmp"
+        with open(salt_file, "w") as f:
+            f.write(f"export GAIA_ENCRYPTION_SALT={salt}\n")
+        print(f"✓ New salt generated and saved to: {salt_file}")
+        print(f"  Run: source {salt_file} && rm {salt_file}")
+        print(f"  Or copy the value from the file to your .env")
     
     elif args.command == "test":
         print("Testing encryption...")

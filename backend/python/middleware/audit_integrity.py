@@ -527,8 +527,13 @@ if __name__ == "__main__":
     
     if args.command == "generate-secret":
         secret = os.urandom(32).hex()
-        print(f"New HMAC secret: {secret}")
-        print(f"Add to environment: export {AUDIT_HMAC_SECRET_ENV}={secret}")
+        # CodeQL Fix: Write secret to file instead of stdout to avoid clear-text logging
+        secret_file = ".gaia_audit_secret.tmp"
+        with open(secret_file, "w") as f:
+            f.write(f"export GAIA_AUDIT_HMAC_SECRET={secret}\n")
+        print(f"✓ New HMAC secret generated and saved to: {secret_file}")
+        print(f"  Run: source {secret_file} && rm {secret_file}")
+        print(f"  Or copy the value from the file to your .env")
     
     elif args.command == "test":
         print("Testing audit integrity...")
