@@ -529,7 +529,9 @@ if __name__ == "__main__":
         secret = os.urandom(32).hex()
         # CodeQL Fix: Write secret to file instead of stdout to avoid clear-text logging
         secret_file = ".gaia_audit_secret.tmp"
-        with open(secret_file, "w") as f:
+        # Open file with strict permissions (0o600), minimizing secret exposure
+        fd = os.open(secret_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             f.write(f"export GAIA_AUDIT_HMAC_SECRET={secret}\n")
         print(f"✓ New HMAC secret generated and saved to: {secret_file}")
         print(f"  Run: source {secret_file} && rm {secret_file}")
