@@ -13,7 +13,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Request, Response, status, Depends
+from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, BackgroundTasks
 from pydantic import BaseModel, HttpUrl, Field, validator
 
 # Import security middleware
@@ -306,10 +306,11 @@ async def delete_rss_feed(
 async def process_rss_feeds(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     process_request: ProcessRSSRequest = ProcessRSSRequest()
 ):
     """
-    Trigger RSS feed processing manually.
+    Trigger RSS feed processing in the background.
     
     Requires: Master Admin or Validator role
     Rate Limited: 5 requests per minute (AI/ML intensive)
@@ -317,7 +318,10 @@ async def process_rss_feeds(
     Query Parameters:
     - feed_ids: Optional list of feed IDs to process (processes all active feeds if omitted)
     
-    Returns processing results and statistics.
+    **IMPORTANT**: This endpoint returns immediately and processes feeds in the background
+    to prevent blocking other API requests. Check processing status via logs or database.
+    
+    Returns confirmation that processing has started.
     """
     try:
         # Get feeds to process
@@ -342,53 +346,67 @@ async def process_rss_feeds(
             )
         
         feeds = feeds_query.data
-        logger.info(f"Processing {len(feeds)} RSS feeds...")
-        
-        # Extract feed URLs
         feed_urls = [feed['feed_url'] for feed in feeds]
+        feeds_count = len(feeds)
         
-        # Process feeds using enhanced processor
-        rss_processor_enhanced.set_feeds(feed_urls)
-        results = await rss_processor_enhanced.process_all_feeds()
+        logger.info(f"Scheduling background processing for {feeds_count} RSS feeds...")
         
-        # Save processing logs to database
-        for result in results:
-            log_data = {
-                'feed_url': result['feed_url'],
-                'status': result['status'],
-                'items_processed': result.get('items_processed', 0),
-                'items_added': result.get('items_added', 0),
-                'duplicates_detected': result.get('duplicates_detected', 0),
-                'errors_count': 1 if result['status'] == 'error' else 0,
-                'processing_time_seconds': result.get('processing_time', 0),
-                'error_message': result.get('error_message'),
-                'hazard_ids': [h['id'] for h in result.get('hazards_saved', [])],
-                'processed_by': 'manual'
-            }
-            
-            # Insert log (trigger will update feed stats)
-            supabase.schema('gaia').table('rss_processing_logs').insert(log_data).execute()
+        # Define background processing function
+        async def process_feeds_background():
+            """Process feeds asynchronously in the background."""
+            try:
+                logger.info(f"[Background] Starting RSS processing for {feeds_count} feeds...")
+                
+                # Process feeds using enhanced processor
+                rss_processor_enhanced.set_feeds(feed_urls)
+                results = await rss_processor_enhanced.process_all_feeds()
+                
+                # Save processing logs to database
+                for result in results:
+                    log_data = {
+                        'feed_url': result['feed_url'],
+                        'status': result['status'],
+                        'items_processed': result.get('items_processed', 0),
+                        'items_added': result.get('items_added', 0),
+                        'duplicates_detected': result.get('duplicates_detected', 0),
+                        'errors_count': 1 if result['status'] == 'error' else 0,
+                        'processing_time_seconds': result.get('processing_time', 0),
+                        'error_message': result.get('error_message'),
+                        'hazard_ids': [h['id'] for h in result.get('hazards_saved', [])],
+                        'processed_by': 'manual'
+                    }
+                    
+                    # Insert log (trigger will update feed stats)
+                    supabase.schema('gaia').table('rss_processing_logs').insert(log_data).execute()
+                
+                # Get statistics
+                stats = rss_processor_enhanced.get_statistics()
+                
+                logger.info(f"[Background] RSS processing complete: {stats['total_stored']} hazards saved, "
+                           f"{stats['duplicates_detected']} duplicates detected")
+                
+            except Exception as e:
+                logger.error(f"[Background] RSS processing error: {str(e)}", exc_info=True)
         
-        # Get statistics
-        stats = rss_processor_enhanced.get_statistics()
+        # Add to background tasks (non-blocking)
+        background_tasks.add_task(process_feeds_background)
         
-        logger.info(f"RSS processing complete: {stats['total_stored']} hazards saved, "
-                   f"{stats['duplicates_detected']} duplicates detected")
-        
+        # Return immediately with processing started confirmation
         return {
-            'status': 'completed',
-            'feeds_processed': len(results),
-            'results': results,
-            'statistics': stats
+            'status': 'processing',
+            'message': 'RSS feed processing started in background',
+            'feeds_count': feeds_count,
+            'feeds': [{'id': f['id'], 'name': f['feed_name']} for f in feeds],
+            'note': 'Processing happens in background. Check logs or statistics for results.'
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing RSS feeds: {str(e)}", exc_info=True)
+        logger.error(f"Error starting RSS feed processing: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"RSS processing failed: {str(e)}"
+            detail=f"Failed to start RSS processing: {str(e)}"
         )
 
 
@@ -563,4 +581,256 @@ async def test_rss_feed(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to test RSS feed: {str(e)}"
+        )
+
+
+# ============================================================================
+# RSS ARTICLES (HAZARDS) ENDPOINTS
+# ============================================================================
+
+class RSSArticleResponse(BaseModel):
+    """RSS article (hazard) response model"""
+    id: str
+    hazard_type: str
+    severity: Optional[str]
+    status: str
+    location_name: Optional[str]
+    admin_division: Optional[str]
+    latitude: float
+    longitude: float
+    confidence_score: float
+    model_version: Optional[str]
+    source_type: str
+    source_url: Optional[str]
+    source_title: Optional[str]
+    source_content: Optional[str]
+    source_published_at: Optional[datetime]
+    source: Optional[str]
+    validated: bool
+    validated_at: Optional[datetime]
+    validation_notes: Optional[str]
+    detected_at: Optional[datetime]
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request model for bulk deleting articles"""
+    ids: List[str] = Field(..., description="List of article IDs to delete", min_items=1, max_items=100)
+
+
+@router.get("/articles", response_model=List[RSSArticleResponse])
+@limiter.limit("30/minute")
+async def list_rss_articles(
+    request: Request,
+    response: Response,
+    hazard_type: Optional[str] = None,
+    validated: Optional[bool] = None,
+    source: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0
+):
+    """
+    List all RSS articles (hazards from RSS sources) with filtering.
+    
+    Query Parameters:
+    - hazard_type: Filter by hazard type (e.g., 'typhoon', 'flood')
+    - validated: Filter by validation status
+    - source: Filter by source feed URL
+    - limit: Number of articles to return (optional, returns all if not specified, max: 1000)
+    - offset: Pagination offset
+    
+    Returns list of RSS articles with metadata.
+    """
+    try:
+        query = supabase.schema('gaia').table('hazards') \
+            .select('*') \
+            .eq('source_type', 'rss')
+        
+        if hazard_type:
+            query = query.eq('hazard_type', hazard_type)
+        
+        if validated is not None:
+            query = query.eq('validated', validated)
+        
+        if source:
+            query = query.eq('source', source)
+        
+        query = query.order('created_at', desc=True)
+        
+        # Apply limit only if specified (cap at 1000 for safety)
+        if limit is not None:
+            if limit > 1000:
+                limit = 1000
+            query = query.limit(limit)
+        
+        if offset > 0:
+            query = query.offset(offset)
+        
+        result = query.execute()
+        
+        return result.data
+        
+    except Exception as e:
+        logger.error(f"Error listing RSS articles: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve RSS articles: {str(e)}"
+        )
+
+
+@router.get("/articles/count")
+@limiter.limit("30/minute")
+async def count_rss_articles(
+    request: Request,
+    response: Response,
+    hazard_type: Optional[str] = None,
+    validated: Optional[bool] = None,
+    source: Optional[str] = None
+):
+    """
+    Get the total count of RSS articles matching filters.
+    
+    Query Parameters:
+    - hazard_type: Filter by hazard type
+    - validated: Filter by validation status
+    - source: Filter by source feed URL
+    
+    Returns count of matching articles.
+    """
+    try:
+        query = supabase.schema('gaia').table('hazards') \
+            .select('id', count='exact') \
+            .eq('source_type', 'rss')
+        
+        if hazard_type:
+            query = query.eq('hazard_type', hazard_type)
+        
+        if validated is not None:
+            query = query.eq('validated', validated)
+        
+        if source:
+            query = query.eq('source', source)
+        
+        result = query.execute()
+        
+        return {'count': result.count or 0}
+        
+    except Exception as e:
+        logger.error(f"Error counting RSS articles: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to count RSS articles: {str(e)}"
+        )
+
+
+@router.delete("/articles/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/minute")
+async def delete_rss_article(
+    request: Request,
+    response: Response,
+    article_id: str
+):
+    """
+    Delete a single RSS article.
+    
+    Requires: Master Admin or Validator role
+    Rate Limited: 20 requests per minute
+    
+    Only deletes articles with source_type='rss' for safety.
+    """
+    try:
+        # First verify the article exists and is an RSS article
+        check_result = supabase.schema('gaia').table('hazards') \
+            .select('id') \
+            .eq('id', article_id) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        if not check_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSS article not found"
+            )
+        
+        # Delete the article
+        result = supabase.schema('gaia').table('hazards') \
+            .delete() \
+            .eq('id', article_id) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        logger.info(f"Deleted RSS article: {article_id}")
+        
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting RSS article: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete RSS article: {str(e)}"
+        )
+
+
+@router.post("/articles/bulk-delete", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+async def bulk_delete_rss_articles(
+    request: Request,
+    response: Response,
+    delete_request: BulkDeleteRequest
+):
+    """
+    Bulk delete multiple RSS articles.
+    
+    Requires: Master Admin role
+    Rate Limited: 10 requests per minute
+    
+    Only deletes articles with source_type='rss' for safety.
+    Maximum 100 articles per request.
+    """
+    try:
+        ids = delete_request.ids
+        
+        # First verify all articles exist and are RSS articles
+        check_result = supabase.schema('gaia').table('hazards') \
+            .select('id') \
+            .in_('id', ids) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        found_ids = [item['id'] for item in check_result.data]
+        not_found_ids = [id for id in ids if id not in found_ids]
+        
+        if not found_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No valid RSS articles found to delete"
+            )
+        
+        # Delete the articles
+        result = supabase.schema('gaia').table('hazards') \
+            .delete() \
+            .in_('id', found_ids) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        deleted_count = len(result.data) if result.data else 0
+        
+        logger.info(f"Bulk deleted {deleted_count} RSS articles")
+        
+        return {
+            'deleted_count': deleted_count,
+            'deleted_ids': found_ids,
+            'not_found_ids': not_found_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk deleting RSS articles: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk delete RSS articles: {str(e)}"
         )

@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth, UserRole } from '../contexts/AuthContext';
+import { RSSAutoProcessProvider } from '../contexts/RSSAutoProcessContext';
 import { NotificationsDropdown } from '../components/NotificationsDropdown';
 import {
   Sidebar,
@@ -223,10 +224,11 @@ export default function UnifiedDashboard() {
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar className="border-r" data-tour="sidebar">
+    <RSSAutoProcessProvider>
+      <SidebarProvider>
+        <div className="flex h-screen w-full overflow-hidden">
+          {/* Sidebar */}
+          <Sidebar className="border-r" data-tour="sidebar">
           <SidebarContent>
             {/* Header */}
             <SidebarGroup>
@@ -302,7 +304,8 @@ export default function UnifiedDashboard() {
           {/* Onboarding */}
           <AdminOnboarding />
         </SidebarInset>
-      </div>
-    </SidebarProvider>
+        </div>
+      </SidebarProvider>
+    </RSSAutoProcessProvider>
   );
 }

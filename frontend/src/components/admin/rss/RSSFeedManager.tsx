@@ -10,6 +10,13 @@
  * - Test Feed button for preview
  * - Real-time statistics display
  * - Mobile-responsive design
+ * - **Auto-processing**: Automatically processes RSS feeds every 20 minutes
+ *   - Managed by RSSAutoProcessContext (persists across views)
+ *   - Non-blocking: Processing runs in background without freezing the UI
+ *   - Overlap prevention: Skips if a process is already running
+ *   - Visual countdown: Shows time until next automatic run
+ *   - Pause/Resume: Can be toggled on/off by the user
+ *   - Manual override: "Process Now" resets the timer
  * 
  * Columns: Name, URL, Category, Priority, Active, Last Fetched, Total Hazards, Actions
  * Rate Limits: GET (30/min), POST (10/min), PATCH (20/min), DELETE (10/min), Test (3/min)
@@ -39,6 +46,9 @@ import {
   Edit,
   Check,
   X,
+  Timer,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -93,9 +103,9 @@ import {
   useCreateRSSFeed,
   useUpdateRSSFeed,
   useDeleteRSSFeed,
-  useProcessRSSFeeds,
   useTestRSSFeed,
 } from '../../../hooks/useRSS';
+import { useRSSAutoProcess } from '../../../contexts/RSSAutoProcessContext';
 import { RSSFeed, RSSFeedCreate, RSSFeedUpdate } from '../../../types/rss';
 
 // ============================================================================
@@ -337,8 +347,16 @@ export function RSSFeedManager() {
   const createMutation = useCreateRSSFeed();
   const updateMutation = useUpdateRSSFeed();
   const deleteMutation = useDeleteRSSFeed();
-  const processMutation = useProcessRSSFeeds();
   const testMutation = useTestRSSFeed();
+
+  // Auto-processing from context (persists across views)
+  const { 
+    isEnabled: isAutoProcessEnabled, 
+    isProcessing, 
+    countdown, 
+    toggle: toggleAutoProcessing,
+    processNow 
+  } = useRSSAutoProcess();
 
   // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -461,7 +479,7 @@ export function RSSFeedManager() {
   const handleProcessAllFeeds = async () => {
     toast.info('Starting RSS feed processing...');
     try {
-      await processMutation.mutateAsync({});
+      await processNow();
     } catch (error) {
       console.error('Process feeds error:', error);
     }
@@ -573,13 +591,38 @@ export function RSSFeedManager() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Auto-Processing Status Indicator */}
+          <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={toggleAutoProcessing}
+              title={isAutoProcessEnabled ? 'Pause auto-processing' : 'Resume auto-processing'}
+            >
+              {isAutoProcessEnabled ? (
+                <Pause className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <Play className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </Button>
+            <Timer className={`h-4 w-4 ${isAutoProcessEnabled ? 'text-green-500' : 'text-muted-foreground'}`} />
+            {isAutoProcessEnabled ? (
+              <span className="text-muted-foreground">
+                Next: <span className="font-mono font-medium text-foreground">{countdown || '--:--'}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Auto-process paused</span>
+            )}
+          </div>
+
           <Button
             variant="outline"
             size="sm"
             onClick={handleProcessAllFeeds}
-            disabled={processMutation.isPending}
+            disabled={isProcessing}
           >
-            {processMutation.isPending ? (
+            {isProcessing ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Processing...

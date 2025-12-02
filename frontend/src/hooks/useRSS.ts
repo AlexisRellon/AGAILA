@@ -22,6 +22,8 @@ import {
   RSSStatistics,
   ProcessFeedsRequest,
   TestFeedResult,
+  RSSArticle,
+  RSSArticlesFilter,
 } from '../types/rss';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -38,6 +40,8 @@ export const rssQueryKeys = {
   logs: (filters?: { feed_url?: string; status?: string; limit?: number }) =>
     [...rssQueryKeys.all, 'logs', filters] as const,
   statistics: () => [...rssQueryKeys.all, 'statistics'] as const,
+  articles: (filters?: RSSArticlesFilter) => [...rssQueryKeys.all, 'articles', filters] as const,
+  article: (id: string) => [...rssQueryKeys.all, 'articles', id] as const,
 };
 
 // ============================================================================
@@ -62,6 +66,11 @@ async function fetchAPI<T>(
       detail: `HTTP error! status: ${response.status}`,
     }));
     throw new Error(errorData.detail || 'API request failed');
+  }
+
+  // Handle 204 No Content responses (e.g., DELETE requests)
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return response.json();
@@ -95,10 +104,19 @@ async function deleteFeed(id: string): Promise<{ message: string }> {
   });
 }
 
+interface ProcessFeedsResponse {
+  status: 'processing' | 'completed';
+  message: string;
+  feeds_count: number;
+  feeds?: Array<{ id: string; name: string }>;
+  note?: string;
+  results?: unknown[];
+}
+
 async function processFeeds(
   request?: ProcessFeedsRequest
-): Promise<{ message: string; results: unknown[] }> {
-  return fetchAPI<{ message: string; results: unknown[] }>('/process', {
+): Promise<ProcessFeedsResponse> {
+  return fetchAPI<ProcessFeedsResponse>('/process', {
     method: 'POST',
     body: JSON.stringify(request || {}),
   });
@@ -253,23 +271,26 @@ export function useDeleteRSSFeed() {
 }
 
 /**
- * Trigger RSS feed processing manually
+ * Trigger RSS feed processing in background
  * Rate limited: 5/min (AI intensive operation)
+ * 
+ * Note: This returns immediately - processing happens in the background.
+ * Check logs or statistics for results.
  */
 export function useProcessRSSFeeds() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: processFeeds,
-    onSuccess: () => {
-      // Invalidate related queries
+    onSuccess: (data) => {
+      // Invalidate related queries (they'll update as background processing completes)
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.feeds() });
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.logs() });
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
-      toast.success('RSS processing started. Check logs for results.');
+      toast.success(`Processing ${data.feeds_count} feeds in background. Check logs for results.`);
     },
     onError: (error: Error) => {
-      toast.error(`Processing failed: ${error.message}`);
+      toast.error(`Failed to start processing: ${error.message}`);
     },
   });
 }
@@ -322,6 +343,154 @@ export function useTestRSSFeed() {
     },
     onError: (error: Error) => {
       toast.error(`Test failed: ${error.message}`);
+    },
+  });
+}
+
+// ============================================================================
+// RSS ARTICLES API CLIENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Fetch RSS articles via backend API
+ * Backend uses service role to bypass RLS
+ */
+async function fetchRSSArticles(filters?: RSSArticlesFilter): Promise<{
+  articles: RSSArticle[];
+  total: number;
+}> {
+  const params = new URLSearchParams();
+  
+  if (filters?.hazard_type) params.append('hazard_type', filters.hazard_type);
+  if (filters?.validated !== undefined) params.append('validated', String(filters.validated));
+  if (filters?.source) params.append('source', filters.source);
+  if (filters?.limit) params.append('limit', String(filters.limit));
+  if (filters?.offset) params.append('offset', String(filters.offset));
+
+  const queryString = params.toString();
+  
+  // Fetch articles and count in parallel
+  const [articlesResponse, countResponse] = await Promise.all([
+    fetchAPI<RSSArticle[]>(`/articles${queryString ? `?${queryString}` : ''}`),
+    fetchAPI<{ count: number }>(`/articles/count${queryString ? `?${queryString}` : ''}`),
+  ]);
+
+  return {
+    articles: articlesResponse,
+    total: countResponse.count,
+  };
+}
+
+/**
+ * Delete an RSS article via backend API
+ */
+async function deleteRSSArticle(id: string): Promise<void> {
+  await fetchAPI<void>(`/articles/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Bulk delete RSS articles via backend API
+ */
+async function bulkDeleteRSSArticles(ids: string[]): Promise<{
+  deleted_count: number;
+  deleted_ids: string[];
+  not_found_ids: string[];
+}> {
+  return fetchAPI<{
+    deleted_count: number;
+    deleted_ids: string[];
+    not_found_ids: string[];
+  }>('/articles/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
+/**
+ * Hook to fetch RSS articles with filtering and pagination
+ * Cache: 1 minute stale time (articles are time-sensitive)
+ */
+export function useRSSArticles(filters?: RSSArticlesFilter) {
+  return useQuery({
+    queryKey: rssQueryKeys.articles(filters),
+    queryFn: () => fetchRSSArticles(filters),
+    staleTime: 1 * 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for real-time updates
+  });
+}
+
+/**
+ * Hook to delete a single RSS article
+ * Uses optimistic update for immediate UI feedback
+ */
+export function useDeleteRSSArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteRSSArticle,
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: rssQueryKeys.all });
+
+      // Get all article query caches
+      const articleQueries = queryClient.getQueriesData<{
+        articles: RSSArticle[];
+        total: number;
+      }>({ queryKey: ['rss', 'articles'] });
+
+      // Optimistically remove from all cached queries
+      articleQueries.forEach(([queryKey, data]) => {
+        if (data) {
+          queryClient.setQueryData(queryKey, {
+            articles: data.articles.filter((article) => article.id !== id),
+            total: data.total - 1,
+          });
+        }
+      });
+
+      return { articleQueries };
+    },
+    onSuccess: () => {
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.articles() });
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
+      toast.success('Article deleted successfully');
+    },
+    onError: (error: Error, _id, context) => {
+      // Rollback on error
+      if (context?.articleQueries) {
+        context.articleQueries.forEach(([queryKey, data]) => {
+          if (data) {
+            queryClient.setQueryData(queryKey, data);
+          }
+        });
+      }
+      toast.error(`Delete failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to bulk delete RSS articles
+ */
+export function useBulkDeleteRSSArticles() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: bulkDeleteRSSArticles,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.articles() });
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
+      toast.success(`${result.deleted_count} article(s) deleted successfully`);
+      if (result.not_found_ids.length > 0) {
+        toast.warning(`${result.not_found_ids.length} article(s) were not found`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Bulk delete failed: ${error.message}`);
     },
   });
 }

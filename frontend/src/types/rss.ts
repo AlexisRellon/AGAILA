@@ -81,3 +81,40 @@ export interface TestFeedResult {
   total_items: number;
   error?: string;
 }
+
+/**
+ * RSS Article (Hazard) type
+ * Represents articles collected from RSS feeds and stored in the hazards table
+ */
+export interface RSSArticle {
+  id: string;
+  hazard_type: string;
+  severity: string | null;
+  status: 'active' | 'resolved' | 'archived';
+  location_name: string;
+  admin_division: string | null;
+  latitude: number;
+  longitude: number;
+  confidence_score: number;
+  model_version: string | null;
+  source_type: 'rss' | 'citizen_report';
+  source_url: string;
+  source_title: string;
+  source_content: string;
+  source_published_at: string | null;
+  source: string; // Feed URL
+  validated: boolean;
+  validated_at: string | null;
+  validation_notes: string | null;
+  detected_at: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface RSSArticlesFilter {
+  hazard_type?: string;
+  validated?: boolean;
+  source?: string;
+  limit?: number;
+  offset?: number;
+}
