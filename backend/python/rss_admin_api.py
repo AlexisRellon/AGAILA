@@ -13,7 +13,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, Query
 from pydantic import BaseModel, HttpUrl, Field, validator
 
 # Import security middleware
@@ -23,8 +23,9 @@ from backend.python.middleware.rate_limiter import limiter
 # Import Supabase client
 from backend.python.lib.supabase_client import supabase
 
-# Import enhanced RSS processor
-from backend.python.pipeline.rss_processor_enhanced import rss_processor_enhanced
+# NOTE: RSS processing is now offloaded to Celery workers (separate container)
+# This prevents blocking the main API event loop during ML inference
+# The rss_processor_enhanced is imported in celery_worker.py instead
 
 # Import ActivityLogger for comprehensive activity tracking  
 from backend.python.middleware.activity_logger import ActivityLogger
@@ -91,29 +92,41 @@ class ProcessRSSRequest(BaseModel):
 
 
 class ProcessingLogResponse(BaseModel):
-    """Response model for processing logs"""
+    """Response model for a single processing log"""
     id: str
+    feed_id: Optional[str] = None
     feed_url: str
     status: str
     items_processed: int
     items_added: int
     duplicates_detected: int
-    errors_count: int
     processing_time_seconds: float
-    error_message: Optional[str]
+    error_details: Optional[dict] = None
+    hazard_ids: Optional[List[str]] = None
     processed_at: datetime
 
 
+class ProcessingLogsResponse(BaseModel):
+    """Response model for processing logs with pagination - matches frontend expectation"""
+    logs: List[ProcessingLogResponse]
+    total: int
+    page: int = 1
+    pages: int = 1
+    limit: int = 50
+    has_next: bool = False
+    has_prev: bool = False
+
+
 class RSSStatisticsResponse(BaseModel):
-    """RSS statistics response"""
+    """RSS statistics response - matches frontend RSSStatistics type"""
     total_feeds: int
     active_feeds: int
     total_hazards_found: int
-    last_24h_runs: int
     last_24h_hazards: int
-    last_24h_avg_processing_time: float
+    last_24h_processing_time_avg: float  # Renamed to match frontend
     last_24h_success_rate: float
-    overall_success_rate: float
+    duplicate_detection_rate: float  # Added to match frontend
+    feeds_with_errors: int  # Added to match frontend
 
 
 # ============================================================================
@@ -201,6 +214,23 @@ async def create_rss_feed(
         
         logger.info(f"Created new RSS feed: {feed.feed_name} ({feed.feed_url})")
         
+        # Log activity for audit trail
+        try:
+            await ActivityLogger.log_activity(
+                user_context=None,  # No user context in this endpoint yet
+                action="RSS_FEED_CREATED",
+                request=request,
+                resource_type="rss_feeds",
+                resource_id=result.data[0]['id'],
+                details={
+                    "feed_name": feed.feed_name,
+                    "feed_url": str(feed.feed_url),
+                    "category": feed.feed_category
+                }
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log activity: {log_error}")
+        
         return result.data[0]
         
     except HTTPException:
@@ -251,6 +281,22 @@ async def update_rss_feed(
         
         logger.info(f"Updated RSS feed: {feed_id}")
         
+        # Log activity for audit trail
+        try:
+            await ActivityLogger.log_activity(
+                user_context=None,
+                action="RSS_FEED_UPDATED",
+                request=request,
+                resource_type="rss_feeds",
+                resource_id=feed_id,
+                details={
+                    "updated_fields": list(update_data.keys()),
+                    "feed_name": result.data[0].get('feed_name')
+                }
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log activity: {log_error}")
+        
         return result.data[0]
         
     except HTTPException:
@@ -279,6 +325,11 @@ async def delete_rss_feed(
     Note: This will also delete all associated processing logs (CASCADE).
     """
     try:
+        # Get feed info before deleting for logging
+        feed_info = supabase.schema('gaia').table('rss_feeds').select('feed_name, feed_url').eq('id', feed_id).execute()
+        feed_name = feed_info.data[0].get('feed_name') if feed_info.data else 'Unknown'
+        feed_url = feed_info.data[0].get('feed_url') if feed_info.data else 'Unknown'
+        
         result = supabase.schema('gaia').table('rss_feeds').delete().eq('id', feed_id).execute()
         
         if not result.data:
@@ -288,6 +339,22 @@ async def delete_rss_feed(
             )
         
         logger.info(f"Deleted RSS feed: {feed_id}")
+        
+        # Log activity for audit trail
+        try:
+            await ActivityLogger.log_activity(
+                user_context=None,
+                action="RSS_FEED_DELETED",
+                request=request,
+                resource_type="rss_feeds",
+                resource_id=feed_id,
+                details={
+                    "feed_name": feed_name,
+                    "feed_url": feed_url
+                }
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log activity: {log_error}")
         
         return Response(status_code=status.HTTP_204_NO_CONTENT)
         
@@ -306,11 +373,10 @@ async def delete_rss_feed(
 async def process_rss_feeds(
     request: Request,
     response: Response,
-    background_tasks: BackgroundTasks,
     process_request: ProcessRSSRequest = ProcessRSSRequest()
 ):
     """
-    Trigger RSS feed processing in the background.
+    Trigger RSS feed processing via Celery worker (non-blocking).
     
     Requires: Master Admin or Validator role
     Rate Limited: 5 requests per minute (AI/ML intensive)
@@ -318,12 +384,35 @@ async def process_rss_feeds(
     Query Parameters:
     - feed_ids: Optional list of feed IDs to process (processes all active feeds if omitted)
     
-    **IMPORTANT**: This endpoint returns immediately and processes feeds in the background
-    to prevent blocking other API requests. Check processing status via logs or database.
+    **IMPORTANT**: This endpoint dispatches processing to Celery workers running in a separate
+    container. This prevents blocking the main API and ensures other requests remain responsive.
+    Check processing status via /admin/rss/task/{task_id} or /admin/rss/current-job.
     
-    Returns confirmation that processing has started.
+    Returns confirmation that processing has been queued.
     """
     try:
+        # Check if there's already a running job
+        running_jobs = supabase.schema('gaia').table('rss_processing_jobs') \
+            .select('*') \
+            .eq('status', 'running') \
+            .execute()
+        
+        if running_jobs.data and len(running_jobs.data) > 0:
+            running_job = running_jobs.data[0]
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    'message': 'RSS processing is already in progress',
+                    'job_id': running_job['id'],
+                    'started_at': running_job['started_at'],
+                    'started_by': running_job['started_by_email'],
+                    'progress': {
+                        'processed': running_job.get('processed_feeds', 0),
+                        'total': running_job.get('total_feeds', 0)
+                    }
+                }
+            )
+        
         # Get feeds to process
         if process_request.feed_ids:
             # Process specific feeds
@@ -346,59 +435,78 @@ async def process_rss_feeds(
             )
         
         feeds = feeds_query.data
-        feed_urls = [feed['feed_url'] for feed in feeds]
         feeds_count = len(feeds)
         
-        logger.info(f"Scheduling background processing for {feeds_count} RSS feeds...")
+        logger.info(f"Dispatching RSS processing to Celery for {feeds_count} feeds...")
         
-        # Define background processing function
-        async def process_feeds_background():
-            """Process feeds asynchronously in the background."""
+        # Import Celery task - dispatch to separate worker process (NON-BLOCKING)
+        # This runs in a completely separate container/process and won't block the API
+        try:
+            from backend.python.celery_worker import process_rss_feeds_task
+            
+            # Dispatch task asynchronously to Celery worker
+            # apply_async() returns immediately without waiting for result
+            task_result = process_rss_feeds_task.apply_async()
+            task_id = task_result.id
+            
+            # Create job record in database for tracking
+            # Get user info from request (if authenticated)
+            user_id = None
+            user_email = "system"
             try:
-                logger.info(f"[Background] Starting RSS processing for {feeds_count} feeds...")
-                
-                # Process feeds using enhanced processor
-                rss_processor_enhanced.set_feeds(feed_urls)
-                results = await rss_processor_enhanced.process_all_feeds()
-                
-                # Save processing logs to database
-                for result in results:
-                    log_data = {
-                        'feed_url': result['feed_url'],
-                        'status': result['status'],
-                        'items_processed': result.get('items_processed', 0),
-                        'items_added': result.get('items_added', 0),
-                        'duplicates_detected': result.get('duplicates_detected', 0),
-                        'errors_count': 1 if result['status'] == 'error' else 0,
-                        'processing_time_seconds': result.get('processing_time', 0),
-                        'error_message': result.get('error_message'),
-                        'hazard_ids': [h['id'] for h in result.get('hazards_saved', [])],
-                        'processed_by': 'manual'
-                    }
-                    
-                    # Insert log (trigger will update feed stats)
-                    supabase.schema('gaia').table('rss_processing_logs').insert(log_data).execute()
-                
-                # Get statistics
-                stats = rss_processor_enhanced.get_statistics()
-                
-                logger.info(f"[Background] RSS processing complete: {stats['total_stored']} hazards saved, "
-                           f"{stats['duplicates_detected']} duplicates detected")
-                
-            except Exception as e:
-                logger.error(f"[Background] RSS processing error: {str(e)}", exc_info=True)
-        
-        # Add to background tasks (non-blocking)
-        background_tasks.add_task(process_feeds_background)
-        
-        # Return immediately with processing started confirmation
-        return {
-            'status': 'processing',
-            'message': 'RSS feed processing started in background',
-            'feeds_count': feeds_count,
-            'feeds': [{'id': f['id'], 'name': f['feed_name']} for f in feeds],
-            'note': 'Processing happens in background. Check logs or statistics for results.'
-        }
+                # Try to extract user from authorization header
+                auth_header = request.headers.get('Authorization', '')
+                if auth_header.startswith('Bearer '):
+                    import jwt
+                    token = auth_header.replace('Bearer ', '')
+                    # Decode without verification just to get user info (Supabase handles auth)
+                    payload = jwt.decode(token, options={"verify_signature": False})
+                    user_id = payload.get('sub')
+                    user_email = payload.get('email', 'system')
+            except Exception:
+                pass
+            
+            job_data = {
+                'started_by': user_id,
+                'started_by_email': user_email,
+                'status': 'running',
+                'total_feeds': feeds_count,
+                'processed_feeds': 0,
+                'hazards_detected': 0,
+                'errors_encountered': 0,
+                'processing_details': {
+                    'task_id': task_id,
+                    'feed_ids': [f['id'] for f in feeds]
+                }
+            }
+            
+            job_result = supabase.schema('gaia').table('rss_processing_jobs').insert(job_data).execute()
+            job_id = job_result.data[0]['id'] if job_result.data else None
+            
+            logger.info(f"RSS processing task dispatched to Celery: Task ID = {task_id}, Job ID = {job_id}")
+            
+            return {
+                'status': 'queued',
+                'message': 'RSS feed processing dispatched to Celery worker',
+                'task_id': task_id,
+                'job_id': job_id,
+                'feeds_count': feeds_count,
+                'feeds': [{'id': f['id'], 'name': f['feed_name']} for f in feeds],
+                'note': 'Processing runs in Celery worker (separate container). Check /admin/rss/current-job for status.'
+            }
+            
+        except ImportError as ie:
+            logger.error(f"Celery import failed: {str(ie)}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Celery worker not available. Ensure Redis and Celery containers are running."
+            )
+        except Exception as celery_error:
+            logger.error(f"Celery dispatch failed: {str(celery_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to dispatch to Celery: {str(celery_error)}"
+            )
         
     except HTTPException:
         raise
@@ -410,32 +518,120 @@ async def process_rss_feeds(
         )
 
 
-@router.get("/logs", response_model=List[ProcessingLogResponse])
+@router.get("/current-job")
+@limiter.limit("60/minute")
+async def get_current_processing_job(
+    request: Request,
+    response: Response
+):
+    """
+    Get the current RSS processing job status.
+    
+    Returns the currently running job (if any) or the most recent completed job.
+    This is useful for the frontend to show processing status and disable the button.
+    """
+    try:
+        # First check for running jobs
+        running_jobs = supabase.schema('gaia').table('rss_processing_jobs') \
+            .select('*') \
+            .eq('status', 'running') \
+            .order('started_at', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if running_jobs.data and len(running_jobs.data) > 0:
+            job = running_jobs.data[0]
+            return {
+                'has_running_job': True,
+                'job': job,
+                'status': 'running',
+                'progress': {
+                    'processed': job.get('processed_feeds', 0),
+                    'total': job.get('total_feeds', 0),
+                    'hazards': job.get('hazards_detected', 0),
+                    'errors': job.get('errors_encountered', 0)
+                }
+            }
+        
+        # No running job, get most recent completed job
+        recent_jobs = supabase.schema('gaia').table('rss_processing_jobs') \
+            .select('*') \
+            .neq('status', 'running') \
+            .order('completed_at', desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if recent_jobs.data and len(recent_jobs.data) > 0:
+            job = recent_jobs.data[0]
+            return {
+                'has_running_job': False,
+                'job': job,
+                'status': job.get('status', 'idle'),
+                'last_completed_at': job.get('completed_at')
+            }
+        
+        return {
+            'has_running_job': False,
+            'job': None,
+            'status': 'idle',
+            'message': 'No processing jobs found'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting current job status: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get current job status: {str(e)}"
+        )
+
+
+@router.get("/logs", response_model=ProcessingLogsResponse)
 @limiter.limit("30/minute")
 async def get_processing_logs(
     request: Request,
     response: Response,
     feed_url: Optional[str] = None,
-    status_filter: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0
+    status_filter: Optional[str] = Query(None, alias="status"),
+    limit: int = Query(50, ge=1, le=500, description="Number of logs to return (max: 500)"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)")
 ):
     """
-    Get RSS processing logs with filtering.
+    Get RSS processing logs with filtering and pagination.
     
     Query Parameters:
     - feed_url: Filter by specific feed URL
-    - status_filter: Filter by status ('success', 'error', 'partial')
-    - limit: Number of logs to return (default: 50, max: 100)
-    - offset: Pagination offset
+    - status: Filter by status ('success', 'error', 'partial')
+    - limit: Number of logs per page (default: 50, max: 500)
+    - offset: Pagination offset (alternative to page)
+    - page: Page number (1-indexed, alternative to offset)
     
-    Returns historical processing logs.
+    Returns:
+    - logs: List of processing log entries
+    - total: Total count of matching logs (for pagination)
+    - page: Current page number
+    - pages: Total number of pages
+    - has_next: Whether there are more pages
+    - has_prev: Whether there are previous pages
     """
     try:
-        # Validate limit
-        if limit > 100:
-            limit = 100
+        # Calculate offset from page if page > 1 and offset not explicitly set
+        if page > 1 and offset == 0:
+            offset = (page - 1) * limit
         
+        # Build base query for counting with exact count
+        count_query = supabase.schema('gaia').table('rss_processing_logs').select('id', count='exact', head=True)
+        
+        if feed_url:
+            count_query = count_query.eq('feed_url', feed_url)
+        
+        if status_filter:
+            count_query = count_query.eq('status', status_filter)
+        
+        count_result = count_query.execute()
+        total = count_result.count if count_result.count is not None else 0
+        
+        # Build query for actual data
         query = supabase.schema('gaia').table('rss_processing_logs').select('*')
         
         if feed_url:
@@ -444,11 +640,24 @@ async def get_processing_logs(
         if status_filter:
             query = query.eq('status', status_filter)
         
-        query = query.order('processed_at', desc=True).limit(limit).offset(offset)
+        # Use range for proper pagination (offset-based)
+        query = query.order('processed_at', desc=True).range(offset, offset + limit - 1)
         
         result = query.execute()
         
-        return result.data
+        # Calculate pagination info
+        total_pages = (total + limit - 1) // limit if total > 0 else 1
+        current_page = (offset // limit) + 1
+        
+        return {
+            "logs": result.data,
+            "total": total,
+            "page": current_page,
+            "pages": total_pages,
+            "limit": limit,
+            "has_next": current_page < total_pages,
+            "has_prev": current_page > 1
+        }
         
     except Exception as e:
         logger.error(f"Error retrieving processing logs: {str(e)}", exc_info=True)
@@ -469,20 +678,28 @@ async def get_rss_statistics(
     
     Returns:
     - Total feeds count
-    - Active feeds count
+    - Active feeds count  
     - Total hazards found
     - Last 24 hours performance metrics
-    - Overall success rate
+    - Duplicate detection rate
+    - Feeds with errors count
     """
     try:
-        # Get feed counts
-        feeds_result = supabase.schema('gaia').table('rss_feeds').select('id, is_active, total_hazards_found').execute()
+        # Get feed counts and error info
+        feeds_result = supabase.schema('gaia').table('rss_feeds').select('id, is_active, total_hazards_found, total_errors').execute()
         
         total_feeds = len(feeds_result.data)
         active_feeds = len([f for f in feeds_result.data if f['is_active']])
-        total_hazards_found = sum(f['total_hazards_found'] for f in feeds_result.data)
+        feeds_with_errors = len([f for f in feeds_result.data if (f.get('total_errors') or 0) > 0])
         
-        # Get last 24h statistics
+        # Count actual hazards from hazards table (more accurate than feed stats)
+        hazards_result = supabase.schema('gaia').table('hazards') \
+            .select('id', count='exact', head=True) \
+            .eq('source_type', 'rss') \
+            .execute()
+        total_hazards_found = hazards_result.count or 0
+        
+        # Get last 24h statistics from processing logs
         time_threshold = datetime.utcnow() - timedelta(hours=24)
         logs_24h_result = supabase.schema('gaia').table('rss_processing_logs') \
             .select('*') \
@@ -492,28 +709,37 @@ async def get_rss_statistics(
         logs_24h = logs_24h_result.data
         
         last_24h_runs = len(logs_24h)
-        last_24h_hazards = sum(log['items_added'] for log in logs_24h)
-        last_24h_avg_processing_time = sum(log['processing_time_seconds'] for log in logs_24h) / max(last_24h_runs, 1)
-        last_24h_success_count = len([log for log in logs_24h if log['status'] == 'success'])
-        last_24h_success_rate = (last_24h_success_count / max(last_24h_runs, 1)) * 100
+        last_24h_avg_processing_time = sum(log.get('processing_time_seconds', 0) or 0 for log in logs_24h) / max(last_24h_runs, 1)
+        last_24h_success_count = len([log for log in logs_24h if log.get('status') == 'success'])
+        # Return as decimal (0-1 range) - frontend multiplies by 100 for display
+        last_24h_success_rate = last_24h_success_count / max(last_24h_runs, 1)
         
-        # Overall success rate
-        all_logs_result = supabase.schema('gaia').table('rss_processing_logs').select('status').execute()
+        # Get actual hazards created in last 24h from hazards table
+        hazards_24h_result = supabase.schema('gaia').table('hazards') \
+            .select('id', count='exact', head=True) \
+            .eq('source_type', 'rss') \
+            .gte('created_at', time_threshold.isoformat()) \
+            .execute()
+        last_24h_hazards = hazards_24h_result.count or 0
+        
+        # Calculate duplicate detection rate from all logs
+        all_logs_result = supabase.schema('gaia').table('rss_processing_logs').select('items_processed, duplicates_detected').execute()
         all_logs = all_logs_result.data
         
-        total_logs = len(all_logs)
-        success_logs = len([log for log in all_logs if log['status'] == 'success'])
-        overall_success_rate = (success_logs / max(total_logs, 1)) * 100
+        total_processed = sum(log.get('items_processed', 0) or 0 for log in all_logs)
+        total_duplicates = sum(log.get('duplicates_detected', 0) or 0 for log in all_logs)
+        # Return as decimal (0-1 range) - frontend multiplies by 100 for display
+        duplicate_detection_rate = total_duplicates / max(total_processed, 1)
         
         return RSSStatisticsResponse(
             total_feeds=total_feeds,
             active_feeds=active_feeds,
             total_hazards_found=total_hazards_found,
-            last_24h_runs=last_24h_runs,
             last_24h_hazards=last_24h_hazards,
-            last_24h_avg_processing_time=round(last_24h_avg_processing_time, 2),
-            last_24h_success_rate=round(last_24h_success_rate, 2),
-            overall_success_rate=round(overall_success_rate, 2)
+            last_24h_processing_time_avg=round(last_24h_avg_processing_time, 2),
+            last_24h_success_rate=round(last_24h_success_rate, 4),  # Decimal: 1.0 = 100%
+            duplicate_detection_rate=round(duplicate_detection_rate, 4),  # Decimal: 0.2225 = 22.25%
+            feeds_with_errors=feeds_with_errors
         )
         
     except Exception as e:
@@ -521,6 +747,61 @@ async def get_rss_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve RSS statistics: {str(e)}"
+        )
+
+
+@router.get("/feed-performance")
+@limiter.limit("30/minute")
+async def get_feed_performance(
+    request: Request,
+    response: Response
+):
+    """
+    Get hazard counts per feed for charting.
+    
+    Returns list of feeds with their actual hazard counts from the hazards table.
+    """
+    try:
+        # Get all feeds
+        feeds_result = supabase.schema('gaia').table('rss_feeds') \
+            .select('id, feed_name, feed_url, total_fetches') \
+            .eq('is_active', True) \
+            .execute()
+        
+        feeds = feeds_result.data
+        
+        # Get hazard counts per source (feed URL)
+        # Group hazards by source field which contains the feed URL
+        performance_data = []
+        
+        for feed in feeds:
+            # Count hazards for this specific feed URL
+            hazards_result = supabase.schema('gaia').table('hazards') \
+                .select('id', count='exact', head=True) \
+                .eq('source_type', 'rss') \
+                .eq('source', feed['feed_url']) \
+                .execute()
+            
+            hazard_count = hazards_result.count or 0
+            
+            performance_data.append({
+                'id': feed['id'],
+                'name': feed['feed_name'],
+                'feed_url': feed['feed_url'],
+                'hazards': hazard_count,
+                'fetches': feed.get('total_fetches', 0) or 0
+            })
+        
+        # Sort by hazards descending
+        performance_data.sort(key=lambda x: x['hazards'], reverse=True)
+        
+        return performance_data
+        
+    except Exception as e:
+        logger.error(f"Error retrieving feed performance: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve feed performance: {str(e)}"
         )
 
 
@@ -532,12 +813,15 @@ async def test_rss_feed(
     feed_id: str
 ):
     """
-    Test a single RSS feed without saving to database.
+    Test a single RSS feed via Celery worker.
     
     Requires: Master Admin role
     Rate Limited: 3 requests per minute
     
-    Returns preview of what would be processed from the feed.
+    **NOTE**: This dispatches to Celery to prevent blocking the API.
+    For immediate preview, check the feed URL directly in a browser.
+    
+    Returns task_id for tracking processing status.
     """
     try:
         # Get feed
@@ -552,27 +836,28 @@ async def test_rss_feed(
         feed = feed_result.data[0]
         feed_url = feed['feed_url']
         
-        logger.info(f"Testing RSS feed: {feed['feed_name']} ({feed_url})")
+        logger.info(f"Testing RSS feed via Celery: {feed['feed_name']} ({feed_url})")
         
-        # Process feed without saving (using regular processor for testing)
-        from backend.python.pipeline.rss_processor import rss_processor
-        rss_processor.set_feeds([feed_url])
-        results = await rss_processor.process_all_feeds()
-        
-        if results:
-            result = results[0]
+        # Dispatch to Celery worker to prevent blocking
+        try:
+            from backend.python.celery_worker import process_single_feed_task
+            
+            # Dispatch single feed test task
+            task_result = process_single_feed_task.apply_async(args=[feed_id])
+            
             return {
+                'status': 'queued',
+                'task_id': task_result.id,
                 'feed_name': feed['feed_name'],
                 'feed_url': feed_url,
-                'test_result': result,
-                'preview': result.get('hazards_found', [])[:5]  # Show first 5 hazards
+                'message': 'Feed test dispatched to Celery worker. Use /admin/rss/task/{task_id} to check status.'
             }
-        else:
-            return {
-                'feed_name': feed['feed_name'],
-                'feed_url': feed_url,
-                'error': 'No results returned from feed test'
-            }
+            
+        except ImportError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Celery not available. Ensure Redis and Celery containers are running."
+            )
         
     except HTTPException:
         raise
@@ -833,4 +1118,237 @@ async def bulk_delete_rss_articles(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to bulk delete RSS articles: {str(e)}"
+        )
+
+
+class ArticleUpdateRequest(BaseModel):
+    """Request model for updating an article"""
+    status: Optional[str] = Field(None, description="Status: 'active', 'resolved', 'archived'")
+    validated: Optional[bool] = Field(None, description="Validation status")
+    validation_notes: Optional[str] = Field(None, description="Notes from validator")
+    hazard_type: Optional[str] = Field(None, description="Hazard type override")
+    severity: Optional[str] = Field(None, description="Severity: 'low', 'medium', 'high', 'critical'")
+
+
+@router.patch("/articles/{article_id}", response_model=RSSArticleResponse)
+@limiter.limit("30/minute")
+async def update_rss_article(
+    request: Request,
+    response: Response,
+    article_id: str,
+    update_data: ArticleUpdateRequest
+):
+    """
+    Update an RSS article's status, validation, or other fields.
+    
+    Requires: Master Admin or Validator role
+    Rate Limited: 30 requests per minute
+    
+    Fields that can be updated:
+    - status: 'active', 'resolved', 'archived'
+    - validated: true/false
+    - validation_notes: text notes from validator
+    - hazard_type: override detected hazard type
+    - severity: 'low', 'medium', 'high', 'critical'
+    """
+    try:
+        # Verify article exists
+        check_result = supabase.schema('gaia').table('hazards') \
+            .select('*') \
+            .eq('id', article_id) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        if not check_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSS article not found"
+            )
+        
+        # Build update dict with only provided fields
+        update_dict = {}
+        if update_data.status is not None:
+            if update_data.status not in ['active', 'resolved', 'archived']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid status. Must be 'active', 'resolved', or 'archived'"
+                )
+            update_dict['status'] = update_data.status
+            
+        if update_data.validated is not None:
+            update_dict['validated'] = update_data.validated
+            if update_data.validated:
+                update_dict['validated_at'] = datetime.utcnow().isoformat()
+            else:
+                update_dict['validated_at'] = None
+                
+        if update_data.validation_notes is not None:
+            update_dict['validation_notes'] = update_data.validation_notes
+            
+        if update_data.hazard_type is not None:
+            update_dict['hazard_type'] = update_data.hazard_type
+            
+        if update_data.severity is not None:
+            if update_data.severity not in ['low', 'medium', 'high', 'critical']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid severity. Must be 'low', 'medium', 'high', or 'critical'"
+                )
+            update_dict['severity'] = update_data.severity
+        
+        if not update_dict:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No update fields provided"
+            )
+        
+        update_dict['updated_at'] = datetime.utcnow().isoformat()
+        
+        # Perform update
+        result = supabase.schema('gaia').table('hazards') \
+            .update(update_dict) \
+            .eq('id', article_id) \
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Update failed"
+            )
+        
+        logger.info(f"Updated RSS article {article_id}: {list(update_dict.keys())}")
+        
+        return result.data[0]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating RSS article: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update RSS article: {str(e)}"
+        )
+
+
+@router.post("/articles/{article_id}/validate", response_model=RSSArticleResponse)
+@limiter.limit("30/minute")
+async def validate_rss_article(
+    request: Request,
+    response: Response,
+    article_id: str,
+    validation_notes: Optional[str] = None
+):
+    """
+    Quick validate an RSS article (mark as validated=true).
+    
+    Requires: Master Admin or Validator role
+    Rate Limited: 30 requests per minute
+    
+    This is a convenience endpoint for quickly validating articles.
+    Use PATCH /articles/{id} for more complex updates.
+    """
+    try:
+        # Verify article exists
+        check_result = supabase.schema('gaia').table('hazards') \
+            .select('*') \
+            .eq('id', article_id) \
+            .eq('source_type', 'rss') \
+            .execute()
+        
+        if not check_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSS article not found"
+            )
+        
+        # Build update
+        update_dict = {
+            'validated': True,
+            'validated_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        if validation_notes:
+            update_dict['validation_notes'] = validation_notes
+        
+        # Perform update
+        result = supabase.schema('gaia').table('hazards') \
+            .update(update_dict) \
+            .eq('id', article_id) \
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Validation failed"
+            )
+        
+        logger.info(f"Validated RSS article {article_id}")
+        
+        return result.data[0]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating RSS article: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate RSS article: {str(e)}"
+        )
+
+
+# ============================================================================
+# CELERY TASK STATUS ENDPOINT
+# ============================================================================
+
+@router.get("/task/{task_id}")
+@limiter.limit("60/minute")
+async def get_task_status(
+    request: Request,
+    response: Response,
+    task_id: str
+):
+    """
+    Get the status of an RSS processing Celery task.
+    
+    Returns task state and result (if completed).
+    Useful for polling the status of "Process Now" operations.
+    """
+    try:
+        from backend.python.celery_worker import celery_app
+        
+        # Get task result from Celery
+        result = celery_app.AsyncResult(task_id)
+        
+        task_status = {
+            'task_id': task_id,
+            'state': result.state,
+            'ready': result.ready(),
+            'successful': result.successful() if result.ready() else None,
+        }
+        
+        # Include result if task is complete
+        if result.ready():
+            if result.successful():
+                task_status['result'] = result.result
+            else:
+                # Task failed
+                task_status['error'] = str(result.result) if result.result else 'Unknown error'
+        
+        # Include progress info if available
+        if result.state == 'PROGRESS':
+            task_status['progress'] = result.info
+        
+        return task_status
+        
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Celery not available. Ensure Redis and Celery containers are running."
+        )
+    except Exception as e:
+        logger.error(f"Error getting task status: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get task status: {str(e)}"
         )

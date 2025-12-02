@@ -69,6 +69,7 @@ interface FilterState {
   feed_url?: string;
   status?: LogStatus;
   limit: number;
+  page: number;
 }
 
 // ============================================================================
@@ -244,6 +245,7 @@ export function RSSProcessingLogs() {
   // State
   const [filters, setFilters] = useState<FilterState>({
     limit: 50,
+    page: 1,
   });
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'processed_at', desc: true }, // Most recent first
@@ -261,6 +263,10 @@ export function RSSProcessingLogs() {
 
   const logs = logsData?.logs || [];
   const totalLogs = logsData?.total || 0;
+  const currentPage = logsData?.page || 1;
+  const totalPages = logsData?.pages || 1;
+  const hasNextPage = logsData?.has_next || false;
+  const hasPrevPage = logsData?.has_prev || false;
 
   // ============================================================================
   // CSV EXPORT
@@ -329,6 +335,7 @@ export function RSSProcessingLogs() {
     setFilters((prev) => ({
       ...prev,
       feed_url: feedUrl === 'all' ? undefined : feedUrl,
+      page: 1, // Reset to first page on filter change
     }));
   };
 
@@ -336,6 +343,7 @@ export function RSSProcessingLogs() {
     setFilters((prev) => ({
       ...prev,
       status: status === 'all' ? undefined : (status as LogStatus),
+      page: 1, // Reset to first page on filter change
     }));
   };
 
@@ -343,6 +351,14 @@ export function RSSProcessingLogs() {
     setFilters((prev) => ({
       ...prev,
       limit: parseInt(limit),
+      page: 1, // Reset to first page on limit change
+    }));
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setFilters((prev) => ({
+      ...prev,
+      page: newPage,
     }));
   };
 
@@ -534,26 +550,25 @@ export function RSSProcessingLogs() {
         </Table>
       </div>
 
-      {/* Pagination */}
+      {/* Server-Side Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of{' '}
-          {table.getPageCount() || 1}
+          Page {currentPage} of {totalPages} ({totalLogs} total entries)
         </div>
         <div className="space-x-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!hasPrevPage || isFetching}
           >
             Previous
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!hasNextPage || isFetching}
           >
             Next
           </Button>

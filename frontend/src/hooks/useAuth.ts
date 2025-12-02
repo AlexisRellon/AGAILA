@@ -6,16 +6,21 @@
  * - useSignIn: Login mutation with automatic cache invalidation
  * - useSignOut: Logout mutation with cache clearing
  * 
- * Benefits:
+ * Features:
  * - Automatic caching and deduplication
  * - Eliminates duplicate profile fetches
  * - Optimistic updates for better UX
  * - Built-in loading/error states
+ * - Auth event logging (login/logout) to backend
+ * - Single-session enforcement (invalidates other sessions on login)
+ * - Updates last_login timestamp on successful login
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { queryKeys } from '../lib/queryClient';
+
+const API_URL = process.env.REACT_APP_API_URL || '';
 
 export type UserRole = 'master_admin' | 'validator' | 'lgu_responder' | 'citizen';
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending_activation';
@@ -31,6 +36,46 @@ export interface UserProfile {
   position: string | null;
   last_login: string | null;
   onboarding_completed: boolean;
+}
+
+/**
+ * Log authentication event to backend
+ * This updates last_login and logs to activity_logs/audit_logs
+ */
+async function logAuthEvent(
+  userId: string,
+  userEmail: string,
+  eventType: 'LOGIN' | 'LOGOUT' | 'FAILED_LOGIN' | 'SESSION_EXPIRED',
+  sessionId?: string,
+  reason?: string
+): Promise<{ last_login?: string }> {
+  try {
+    const response = await fetch(`${API_URL}/api/v1/auth/log-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        user_email: userEmail,
+        event_type: eventType,
+        session_id: sessionId,
+        reason: reason,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.warn('[useAuth] Failed to log auth event:', response.status);
+      return {};
+    }
+    
+    const data = await response.json();
+    console.log(`[useAuth] Auth event logged: ${eventType}`);
+    return { last_login: data.last_login };
+  } catch (error) {
+    console.warn('[useAuth] Error logging auth event:', error);
+    return {};
+  }
 }
 
 /**
@@ -133,6 +178,11 @@ export function useUserProfile(userId: string | undefined, enabled = true) {
  * Hook for sign-in mutation
  * Automatically invalidates and refetches user profile on success
  * Supports Cloudflare Turnstile captcha verification
+ * 
+ * Features:
+ * - Single-session enforcement: invalidates all other sessions on login
+ * - Auth event logging: logs login to backend (updates last_login)
+ * - Profile status check: blocks inactive/suspended accounts
  */
 export function useSignIn() {
   const queryClient = useQueryClient();
@@ -157,15 +207,49 @@ export function useSignIn() {
 
       if (error) throw error;
       
+      // Get session ID for logging
+      const sessionId = data.session?.access_token?.substring(0, 20);
+      
+      // Single-session enforcement: Sign out from all other sessions
+      // This ensures only one active session per user at a time
+      try {
+        await supabase.auth.signOut({ scope: 'others' });
+        console.log('[useAuth] Other sessions invalidated (single-session enforcement)');
+      } catch (signOutError) {
+        console.warn('[useAuth] Could not invalidate other sessions:', signOutError);
+        // Continue with login even if this fails
+      }
+      
+      // Log the login event to backend (updates last_login)
+      const { last_login } = await logAuthEvent(
+        data.user.id,
+        data.user.email || email,
+        'LOGIN',
+        sessionId
+      );
+      
       // Fetch profile to check status
       const profile = await fetchUserProfile(data.user.id);
       
       if (profile && profile.status !== 'active') {
         await supabase.auth.signOut();
+        // Log failed login due to inactive status
+        await logAuthEvent(
+          data.user.id,
+          data.user.email || email,
+          'FAILED_LOGIN',
+          undefined,
+          `Account is ${profile.status}`
+        );
         throw new Error(`Account is ${profile.status}. Contact ICTD administrator.`);
       }
       
-      return { user: data.user, profile };
+      // Update profile with the new last_login value
+      if (profile && last_login) {
+        profile.last_login = last_login;
+      }
+      
+      return { user: data.user, profile, session: data.session };
     },
     onSuccess: (data) => {
       // Invalidate and refetch current user and profile
@@ -182,12 +266,27 @@ export function useSignIn() {
 /**
  * Hook for sign-out mutation
  * Clears all cached data on success
+ * Logs logout event to backend
  */
 export function useSignOut() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async () => {
+      // Get current user before signing out for logging
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Log the logout event before signing out
+      if (user) {
+        await logAuthEvent(
+          user.id,
+          user.email || 'unknown',
+          'LOGOUT',
+          session?.access_token?.substring(0, 20)
+        );
+      }
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     },

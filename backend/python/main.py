@@ -59,6 +59,9 @@ from backend.python.api import hazards as hazards_api
 # PATCH-1.3: Import Realtime SSE router
 from backend.python.api import realtime as realtime_api
 
+# Import Auth API router for auth event logging
+from backend.python.api import auth as auth_api
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -222,6 +225,9 @@ app.include_router(hazards_api.router, prefix="/api/v1")  # Hazards API Proxy
 
 # PATCH-1.3: Include Realtime SSE router
 app.include_router(realtime_api.router, prefix="/api/v1")  # Realtime SSE Streaming
+
+# Include Auth API router for auth event logging
+app.include_router(auth_api.router, prefix="/api/v1")  # Auth Event Logging
 
 # Import analytics router
 from backend.python.analytics_api import router as analytics_router
