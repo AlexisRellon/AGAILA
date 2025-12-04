@@ -13,7 +13,7 @@
  * - Security: RBAC, input validation, confirmation dialogs
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -101,13 +101,7 @@ export default function Dashboard() {
   const [trendDays, setTrendDays] = useState(30);
 
   // Fetch all analytics data
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchAnalytics();
-    }
-  }, [authLoading, user, trendDays]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -131,7 +125,13 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [trendDays]);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchAnalytics();
+    }
+  }, [authLoading, user, fetchAnalytics]);
 
   const handleLogout = async () => {
     try {

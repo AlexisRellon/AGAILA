@@ -7,6 +7,7 @@ import os
 import logging
 import sys
 from pathlib import Path
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -144,45 +145,64 @@ app = FastAPI(
 ENV = os.getenv("ENV", "development")
 
 # Configure CORS with environment-based whitelist
-# Support for Vercel + Railway deployment, localhost development, and future custom domains
+# For security we only allow absolute origin URLs (no wildcard patterns).
 if ENV == "production":
-    # Production: Vercel frontend + Railway backend domains
-    default_origins = "https://*.vercel.app,https://*.railway.app,https://gaia.vercel.app,https://gaia.railway.app"
+    # Production: explicit production frontend domains
+    default_origins = "https://gaia-ph.vercel.app,https://gaia-production-2294.up.railway.app"
 else:
     # Development: localhost only
     default_origins = "http://localhost:3000,http://localhost:8000"
 
 allowed_origins_str = os.getenv("CORS_ORIGINS", default_origins)
 
-# Parse CORS origins (support wildcards for Railway subdomains)
-if "*" in allowed_origins_str:
-    # Wildcard support - validate origins at runtime
-    allowed_origins = "*"  # Allow all origins (Railway handles subdomain validation)
-else:
-    allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+# Parse CORS origins but reject any wildcard entries for security.
+provided = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
+filtered = []
+wildcards_seen = False
+for o in provided:
+    if "*" in o:
+        wildcards_seen = True
+        logger.warning(f"Ignoring wildcard CORS origin for security: {o}")
+        continue
+    # Only accept absolute URLs (basic validation)
+    if not (o.startswith("http://") or o.startswith("https://")):
+        logger.warning(f"Ignoring invalid CORS origin (must be absolute URL): {o}")
+        continue
+    filtered.append(o)
 
-# Log CORS configuration for debugging
+if not filtered:
+    # Fallback to defaults (safe, explicit list)
+    filtered = [origin.strip() for origin in default_origins.split(",") if origin.strip()]
+
 logger.info(f"CORS configured for environment: {ENV}")
-logger.info(f"Allowed origins: {allowed_origins}")
+logger.info(f"Allowed origins (explicit only): {filtered}")
+logger.info(f"Raw CORS_ORIGINS env var: {allowed_origins_str}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=filtered,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[
-        "Content-Type", 
-        "Authorization", 
-        "Accept", 
-        "Origin", 
-        "X-Requested-With", 
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
         "X-API-Key",
         "X-CSRF-Token",
-        "Railway-Deployment-Id"  # Railway-specific header
+        "Railway-Deployment-Id",  # Railway-specific header
+        "x-vercel-id",  # Vercel deployment ID
+        "x-vercel-deployment-url"  # Vercel deployment URL
     ],
     expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Log CORS middleware configuration for debugging
+logger.info(f"✓ CORS middleware configured with {len(filtered)} allowed origins")
+for origin in filtered:
+    logger.info(f"  - {origin}")
 
 # Add security headers middleware (SECURITY_AUDIT.md #5)
 # Use ENV variable defined above - enable HSTS only in production

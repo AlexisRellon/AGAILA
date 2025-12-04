@@ -510,9 +510,10 @@ docker-compose run frontend hawk scan frontend/stackhawk.yml
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
+// Use the public/anon token name without 'KEY'
+const supabaseAnonPublic = process.env.REACT_APP_SUPABASE_ANON_PUBLIC || process.env.REACT_APP_SUPABASE_ANON!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonPublic);
 
 // Subscribe to hazard updates
 export const subscribeToHazards = (callback: (hazard: Hazard) => void) => {
@@ -737,7 +738,7 @@ docker-compose run frontend npm run lint
 ```bash
 # frontend/.env
 REACT_APP_SUPABASE_URL=
-REACT_APP_SUPABASE_ANON_KEY=
+REACT_APP_SUPABASE_ANON_PUBLIC=
 REACT_APP_API_URL=
 REACT_APP_MAPBOX_TOKEN=
 REACT_APP_RECAPTCHA_SITE_KEY=

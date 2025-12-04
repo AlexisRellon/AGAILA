@@ -18,9 +18,16 @@ watchPatterns = [
 [environments.production.backend.deploy]
 startCommand = "cd /app && uvicorn backend.python.main:app --host 0.0.0.0 --port $PORT --workers 2"
 healthcheckPath = "/health"
-healthcheckTimeout = 300  # 5 minutes for AI model loading
+healthcheckTimeout = 300  # 5 minutes for AI model loading (models load on startup)
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# IMPORTANT: Railway healthcheck configuration
+# - The /health endpoint is implemented in backend/python/main.py
+# - Returns JSON: {"status": "healthy", "service": "gaia-backend", "models_loaded": {...}}
+# - Railway sends HTTP GET requests to https://<service-url>/health
+# - If you enable healthcheck in Railway UI, use path: /health (no leading slash issues)
+# - Timeout is generous (300s) because AI models take time to load on cold start
 
 # Deployment teardown for zero-downtime updates
 overlapSeconds = 30  # New deployment starts 30s before old one stops

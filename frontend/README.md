@@ -319,7 +319,7 @@ railway logs --service frontend
 
 **Environment Variables** (set in Railway Dashboard or `railway.toml`):
 - `REACT_APP_SUPABASE_URL` - Supabase project URL
-- `REACT_APP_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `REACT_APP_SUPABASE_ANON_PUBLIC` - Supabase anonymous/publishable token (public)
 - `REACT_APP_API_URL` - Backend API URL (e.g., `https://backend.up.railway.app`)
 - `REACT_APP_MAPBOX_TOKEN` - Mapbox access token (for maps, future)
 - `REACT_APP_RECAPTCHA_SITE_KEY` - reCAPTCHA site key

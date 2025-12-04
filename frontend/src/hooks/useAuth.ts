@@ -85,6 +85,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   const startTime = performance.now();
   
   try {
+    // eslint-disable-next-line no-console
     console.log('[useAuth] Fetching profile for user:', userId);
     
     // 5-second timeout to prevent hangs
@@ -102,17 +103,21 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
     const duration = performance.now() - startTime;
+    // eslint-disable-next-line no-console
     console.log(`[useAuth] Profile fetch took ${duration.toFixed(2)}ms`);
 
     if (error) {
+      // eslint-disable-next-line no-console
       console.error('[useAuth] Error fetching user profile:', error);
       throw error;
     }
 
+    // eslint-disable-next-line no-console
     console.log('[useAuth] Profile fetched successfully:', data?.email);
     return data as UserProfile;
   } catch (error) {
     const duration = performance.now() - startTime;
+    // eslint-disable-next-line no-console
     console.error(`[useAuth] Exception in fetchUserProfile after ${duration.toFixed(2)}ms:`, error);
     throw error;
   }
@@ -129,6 +134,7 @@ export function useCurrentUser() {
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (error) {
+        // eslint-disable-next-line no-console
         console.error('[useAuth] User retrieval error:', error.message);
         
         // Clear invalid sessions
@@ -136,6 +142,7 @@ export function useCurrentUser() {
             error.message.includes('invalid') ||
             error.message.includes('JWT') ||
             error.message.includes('expired')) {
+          // eslint-disable-next-line no-console
           console.warn('[useAuth] Clearing invalid session');
           await supabase.auth.signOut();
           localStorage.clear();
@@ -255,9 +262,11 @@ export function useSignIn() {
       // Invalidate and refetch current user and profile
       queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser() });
       queryClient.setQueryData(queryKeys.auth.profile(data.user.id), data.profile);
+      // eslint-disable-next-line no-console
       console.log('[useAuth] Sign-in successful, cache updated');
     },
     onError: (error) => {
+      // eslint-disable-next-line no-console
       console.error('[useAuth] Sign-in error:', error);
     },
   });
@@ -294,9 +303,11 @@ export function useSignOut() {
       // Clear all cached auth data
       queryClient.removeQueries({ queryKey: queryKeys.auth.all });
       queryClient.clear(); // Clear entire cache for security
+      // eslint-disable-next-line no-console
       console.log('[useAuth] Sign-out successful, cache cleared');
     },
     onError: (error) => {
+      // eslint-disable-next-line no-console
       console.error('[useAuth] Sign-out error:', error);
     },
   });

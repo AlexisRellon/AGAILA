@@ -51,11 +51,11 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PATH=/root/.local/bin:$PATH
 
-# Expose port
+# Expose port (Railway uses $PORT env variable)
 EXPOSE 8000
 
-# Health check for Railway deployment
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:$PORT/health')" || exit 1
+# NOTE: HEALTHCHECK removed - Railway handles health probes via HTTP GET to /health
+# Railway's health check system doesn't execute Dockerfile HEALTHCHECK commands correctly
+# Instead, configure healthcheckPath in Railway dashboard or railway.toml
 
 # Railway uses startCommand from railway.toml - no CMD needed here

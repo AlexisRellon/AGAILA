@@ -177,6 +177,7 @@ const CitizenReportForm: React.FC = () => {
 
     // Check honeypot (should be empty)
     if (formData.website) {
+      // eslint-disable-next-line no-console
       console.log('Bot detected via honeypot');
       return;
     }
@@ -246,6 +247,7 @@ const CitizenReportForm: React.FC = () => {
       });
 
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Submission error:', error);
       // // Reset Turnstile on error for retry - TEMPORARILY DISABLED
       // turnstileRef.current?.reset();
@@ -490,10 +492,11 @@ const CitizenReportForm: React.FC = () => {
             {/* Honeypot Field (Hidden) */}
             <input
               type="text"
+              aria-label="honeypot"
               name="website"
               value={formData.website}
               onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-              style={{ position: 'absolute', left: '-9999px' }}
+              className="absolute left-[-9999px]"
               tabIndex={-1}
               autoComplete="off"
             />

@@ -187,7 +187,9 @@ const UserManagement: React.FC = () => {
       if (statusFilter !== 'all') params.status = statusFilter;
 
       const response = await adminApi.users.list(params);
+      // eslint-disable-next-line no-console
       console.log('[UserManagement] API response:', response);
+      // eslint-disable-next-line no-console
       console.log('[UserManagement] Is array?', Array.isArray(response));
       // Backend returns array directly, not wrapped in {users: []}
       return Array.isArray(response) ? response : [];
@@ -216,6 +218,7 @@ const UserManagement: React.FC = () => {
           table: 'user_profiles',
         },
         () => {
+          // eslint-disable-next-line no-console
           console.log('[UserManagement] User profile changed, refetching...');
           refetch(); // Only refetch when actual database changes occur
         }
@@ -236,6 +239,7 @@ const UserManagement: React.FC = () => {
       createForm.reset();
       // Realtime subscription will automatically trigger refetch
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error creating user:', error);
       toast.error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -253,6 +257,7 @@ const UserManagement: React.FC = () => {
       setSelectedUser(null);
       // Realtime subscription will automatically trigger refetch
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error updating role:', error);
       toast.error(`Failed to update role: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -269,6 +274,7 @@ const UserManagement: React.FC = () => {
       setSelectedUser(null);
       // Realtime subscription will automatically trigger refetch
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error deactivating user:', error);
       toast.error(`Failed to deactivate user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

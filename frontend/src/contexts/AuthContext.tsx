@@ -75,6 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInMutation = useSignInMutation();
   const signOutMutation = useSignOutMutation();
 
+  // Stable signOut callback so it can be referenced safely in timers/effects
+  const signOut = useCallback(async () => {
+    await signOutMutation.mutateAsync();
+  }, [signOutMutation]);
+
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
@@ -87,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         alert('You have been logged out due to inactivity.');
       }, INACTIVITY_TIMEOUT);
     }
-  }, [user]);
+  }, [user, signOut]);
 
   useEffect(() => {
     let mounted = true;
@@ -97,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         if (!mounted) return;
         
+        // eslint-disable-next-line no-console
         console.log('[AuthContext] Auth state change:', event);
         
         setUser(session?.user ?? null);
@@ -155,13 +161,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error('Self-registration is disabled. Please contact administrator.');
   };
 
-  const signOut = async () => {
-    await signOutMutation.mutateAsync();
-  };
+  // signOut is defined above with useCallback to keep identity stable
 
   // Refresh profile by invalidating cache
   const refreshProfile = useCallback(async () => {
     if (user) {
+      // eslint-disable-next-line no-console
       console.log('[AuthContext] Refreshing profile');
       await queryClient.invalidateQueries({ queryKey: ['auth', 'profile', user.id] });
     }

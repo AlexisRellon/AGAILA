@@ -113,42 +113,50 @@ async def get_hazard_stats():
     async def fetch_stats():
         # Get total hazards
         total_response = supabase.schema("gaia").from_('hazards').select('id', count='exact').execute()
+    Get overall hazard statistics (optimized for fast response)
+    """
+    try:
+        # Get total hazards - count only, no data fetch
+        total_response = supabase.schema("gaia").from_('hazards').select('*', count='exact', head=True).execute()
         total_hazards = total_response.count or 0
         
-        # Get active hazards
-        active_response = supabase.schema("gaia").from_('hazards').select('id', count='exact').eq('status', 'active').execute()
+        # Get active hazards - count only
+        active_response = supabase.schema("gaia").from_('hazards').select('*', count='exact', head=True).eq('status', 'active').execute()
         active_hazards = active_response.count or 0
         
-        # Get resolved hazards
-        resolved_response = supabase.schema("gaia").from_('hazards').select('id', count='exact').eq('status', 'resolved').execute()
+        # Get resolved hazards - count only
+        resolved_response = supabase.schema("gaia").from_('hazards').select('*', count='exact', head=True).eq('status', 'resolved').execute()
         resolved_hazards = resolved_response.count or 0
         
-        # Get unverified reports (confidence < 0.7)
-        unverified_response = supabase.schema("gaia").from_('hazards').select('id', count='exact').lt('confidence_score', 0.7).eq('validated', False).execute()
+        # Get unverified reports (confidence < 0.7) - count only
+        unverified_response = supabase.schema("gaia").from_('hazards').select('*', count='exact', head=True).lt('confidence_score', 0.7).eq('validated', False).execute()
         unverified_reports = unverified_response.count or 0
         
-        # Get average confidence score (direct query instead of RPC)
-        all_hazards_response = supabase.schema('gaia').from_('hazards').select('confidence_score').execute()
-        if all_hazards_response.data:
-            confidence_scores = [h['confidence_score'] for h in all_hazards_response.data if h.get('confidence_score')]
+        # Get average confidence score - fetch ONLY confidence_score column, limit to reasonable sample
+        # For very large tables, sample recent 10000 records instead of all
+        confidence_response = supabase.schema('gaia').from_('hazards') \
+            .select('confidence_score') \
+            .order('detected_at', desc=True) \
+            .limit(10000) \
+            .execute()
+        
+        if confidence_response.data and len(confidence_response.data) > 0:
+            confidence_scores = [h['confidence_score'] for h in confidence_response.data if h.get('confidence_score') is not None]
             avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
         else:
             avg_confidence = 0.0
         
+        # Time to action - not yet implemented (requires validated_at field)
         avg_time_to_action = None
         
-        return {
-            "total_hazards": total_hazards,
-            "active_hazards": active_hazards,
-            "resolved_hazards": resolved_hazards,
-            "unverified_reports": unverified_reports,
-            "avg_confidence": round(avg_confidence, 2),
-            "avg_time_to_action": round(avg_time_to_action / 60, 2) if avg_time_to_action else None
-        }
-    
-    try:
-        data = await get_or_set(cache_key, fetch_stats, ttl=CACHE_TTLS.get("analytics:stats", 30))
-        return HazardStats(**data)
+        return HazardStats(
+            total_hazards=total_hazards,
+            active_hazards=active_hazards,
+            resolved_hazards=resolved_hazards,
+            unverified_reports=unverified_reports,
+            avg_confidence=round(avg_confidence, 2),
+            avg_time_to_action=avg_time_to_action
+        )
         
     except Exception as e:
         logger.error(f"Error fetching hazard stats: {e}")
@@ -160,7 +168,7 @@ async def get_hazard_trends(
     days: int = Query(30, ge=7, le=90, description="Number of days to retrieve (7-90)")
 ):
     """
-    Get hazard trends over time (cached for 2 minutes)
+    Get hazard trends over time (last N days) - optimized with limit
     """
     cache_key = generate_cache_key("analytics:trends", days=days)
     
@@ -168,10 +176,13 @@ async def get_hazard_trends(
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         
+        # Fetch hazards within the date range - LIMITED to prevent timeout
+        # Note: For production, implement database-side GROUP BY aggregation via stored procedure
         response = supabase.schema('gaia').from_('hazards') \
             .select('hazard_type,detected_at') \
             .gte('detected_at', start_date.isoformat()) \
             .lte('detected_at', end_date.isoformat()) \
+            .limit(5000) \
             .execute()
         
         date_data = {}
@@ -187,6 +198,7 @@ async def get_hazard_trends(
             for hazard_type in all_hazard_types:
                 date_data[date_str][hazard_type] = 0
         
+        # Aggregate by date and type (limited dataset)
         if response.data:
             for item in response.data:
                 detected = datetime.fromisoformat(item['detected_at'].replace('Z', '+00:00'))
@@ -211,13 +223,14 @@ async def get_hazard_trends(
 @router.get("/regions", response_model=List[RegionStats])
 async def get_region_stats():
     """
-    Get hazard statistics by region (cached for 3 minutes)
+    Get hazard statistics by administrative region - optimized with limit
     """
-    cache_key = generate_cache_key("analytics:regions")
-    
-    async def fetch_regions():
+    try:
+        # Fetch hazards with admin_division - LIMITED to prevent timeout
+        # Note: For production, implement database-side GROUP BY aggregation
         response = supabase.schema('gaia').from_('hazards') \
             .select('admin_division,status') \
+            .limit(5000) \
             .execute()
         
         if not response.data:
