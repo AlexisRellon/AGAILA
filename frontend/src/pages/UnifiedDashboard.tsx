@@ -43,7 +43,7 @@ import {
   Shield,
   MapPin,
   LogOut,
-  Home,
+  // Home,
   Rss,
 } from 'lucide-react';
 
@@ -238,10 +238,11 @@ export default function UnifiedDashboard() {
           <SidebarContent>
             {/* Header */}
             <SidebarGroup>
-              <Link to="/" className="flex items-center gap-2 px-4 py-4 hover:bg-accent transition-colors cursor-pointer">
-                <Home className="h-6 w-6 text-primary" />
+              <Link to="/" className="flex items-center gap-2 px-4 py-4 transition-colors cursor-pointer">
+                {/* <Home className="h-6 w-6 text-primary" /> */}
                 <div className="flex flex-col">
-                  <span className="font-semibold text-lg">GAIA</span>
+                  {/* <span className="font-semibold text-lg">GAIA</span> */}
+                  <img src="/assets/img/GAIA.svg" alt="GAIA Logo" className="w-[3.5rem]" />
                   <span className="text-xs text-muted-foreground">
                     {userProfile?.role.replace('_', ' ').toUpperCase()}
                   </span>

@@ -85,6 +85,23 @@ def process_rss_feeds_task(self):
         from backend.python.pipeline.rss_processor_enhanced import rss_processor_enhanced
         import asyncio
         
+        # Find and update the job record for this task
+        job_id = None
+        try:
+            # Find job with this task_id
+            jobs = supabase.schema('gaia').table('rss_processing_jobs') \
+                .select('*') \
+                .eq('status', 'running') \
+                .order('started_at', desc=True) \
+                .limit(1) \
+                .execute()
+            
+            if jobs.data:
+                job_id = jobs.data[0]['id']
+                logger.info(f"Found job record: {job_id}")
+        except Exception as job_err:
+            logger.warning(f"Could not find job record: {job_err}")
+        
         # Get active feeds from database
         feeds_result = supabase.schema('gaia').table('rss_feeds') \
             .select('*') \
@@ -94,6 +111,16 @@ def process_rss_feeds_task(self):
         
         if not feeds_result.data:
             logger.warning("No active RSS feeds found in database")
+            # Update job status if exists
+            if job_id:
+                supabase.schema('gaia').table('rss_processing_jobs') \
+                    .update({
+                        'status': 'completed',
+                        'completed_at': datetime.utcnow().isoformat(),
+                        'error_message': 'No active feeds configured'
+                    }) \
+                    .eq('id', job_id) \
+                    .execute()
             return {
                 'status': 'skipped',
                 'message': 'No active feeds configured',
@@ -101,7 +128,15 @@ def process_rss_feeds_task(self):
             }
         
         feeds = feeds_result.data
-        logger.info(f"Processing {len(feeds)} active RSS feeds...")
+        total_feeds = len(feeds)
+        logger.info(f"Processing {total_feeds} active RSS feeds...")
+        
+        # Update job with total feeds
+        if job_id:
+            supabase.schema('gaia').table('rss_processing_jobs') \
+                .update({'total_feeds': total_feeds}) \
+                .eq('id', job_id) \
+                .execute()
         
         # Extract feed URLs
         feed_urls = [feed['feed_url'] for feed in feeds]
@@ -113,13 +148,25 @@ def process_rss_feeds_task(self):
         results = loop.run_until_complete(rss_processor_enhanced.process_all_feeds())
         loop.close()
         
+        # Calculate statistics
+        total_hazards = 0
+        total_errors = 0
+        processed_count = 0
+        
         # Save processing logs to database
         for result in results:
+            processed_count += 1
+            items_added = result.get('items_added', 0)
+            total_hazards += items_added
+            
+            if result['status'] == 'error':
+                total_errors += 1
+            
             log_data = {
                 'feed_url': result['feed_url'],
                 'status': result['status'],
                 'items_processed': result.get('items_processed', 0),
-                'items_added': result.get('items_added', 0),
+                'items_added': items_added,
                 'duplicates_detected': result.get('duplicates_detected', 0),
                 'errors_count': 1 if result['status'] == 'error' else 0,
                 'processing_time_seconds': result.get('processing_time', 0),
@@ -130,6 +177,17 @@ def process_rss_feeds_task(self):
             
             # Insert log (trigger will update feed stats)
             supabase.schema('gaia').table('rss_processing_logs').insert(log_data).execute()
+            
+            # Update job progress
+            if job_id:
+                supabase.schema('gaia').table('rss_processing_jobs') \
+                    .update({
+                        'processed_feeds': processed_count,
+                        'hazards_detected': total_hazards,
+                        'errors_encountered': total_errors
+                    }) \
+                    .eq('id', job_id) \
+                    .execute()
         
         # Get statistics
         stats = rss_processor_enhanced.get_statistics()
@@ -137,15 +195,56 @@ def process_rss_feeds_task(self):
         logger.info(f"RSS processing complete: {stats['total_stored']} hazards saved, "
                    f"{stats['duplicates_detected']} duplicates detected")
         
+        # Update job as completed
+        if job_id:
+            supabase.schema('gaia').table('rss_processing_jobs') \
+                .update({
+                    'status': 'completed',
+                    'completed_at': datetime.utcnow().isoformat(),
+                    'processed_feeds': processed_count,
+                    'hazards_detected': total_hazards,
+                    'errors_encountered': total_errors,
+                    'processing_details': {
+                        'statistics': stats,
+                        'task_id': self.request.id
+                    }
+                }) \
+                .eq('id', job_id) \
+                .execute()
+        
         return {
             'status': 'completed',
             'feeds_processed': len(results),
+            'hazards_detected': total_hazards,
             'statistics': stats,
             'processed_at': datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         logger.error(f"Error in RSS processing task: {str(e)}", exc_info=True)
+        
+        # Update job as failed
+        try:
+            from backend.python.lib.supabase_client import supabase
+            jobs = supabase.schema('gaia').table('rss_processing_jobs') \
+                .select('id') \
+                .eq('status', 'running') \
+                .order('started_at', desc=True) \
+                .limit(1) \
+                .execute()
+            
+            if jobs.data:
+                supabase.schema('gaia').table('rss_processing_jobs') \
+                    .update({
+                        'status': 'failed',
+                        'completed_at': datetime.utcnow().isoformat(),
+                        'error_message': str(e)
+                    }) \
+                    .eq('id', jobs.data[0]['id']) \
+                    .execute()
+        except Exception as update_err:
+            logger.error(f"Failed to update job status: {update_err}")
+        
         # Retry task up to 3 times with exponential backoff
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries), max_retries=3)
 

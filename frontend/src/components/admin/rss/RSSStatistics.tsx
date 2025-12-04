@@ -57,8 +57,10 @@ import {
 import { toast } from 'sonner';
 import {
   useRSSStatistics,
-  useRSSFeeds,
+  // useRSSFeeds,
   useProcessRSSFeeds,
+  useCurrentProcessingJob,
+  useFeedPerformance,
 } from '../../../hooks/useRSS';
 
 // ============================================================================
@@ -139,8 +141,13 @@ export function RSSStatistics() {
 
   // Queries
   const { data: stats, isLoading, error, isFetching } = useRSSStatistics();
-  const { data: feeds = [] } = useRSSFeeds();
+  // const { data: feeds = [] } = useRSSFeeds();
+  const { data: feedPerformance = [] } = useFeedPerformance();
+  const { data: currentJob } = useCurrentProcessingJob();
   const processMutation = useProcessRSSFeeds();
+  
+  // Determine if processing is in progress
+  const isProcessing = currentJob?.has_running_job || processMutation.isPending;
 
   // ============================================================================
   // PROCESS FEEDS HANDLER
@@ -159,13 +166,12 @@ export function RSSStatistics() {
   // CHART DATA PREPARATION
   // ============================================================================
 
-  // Feed Performance Data (Bar Chart)
-  const feedPerformanceData = feeds
+  // Feed Performance Data (Bar Chart) - Uses actual hazard counts from hazards table
+  const feedPerformanceData = feedPerformance
     .slice(0, 10) // Top 10 feeds
-    .map((feed) => ({
-      name: feed.feed_name,
-      hazards: feed.total_hazards_found,
-      fetches: feed.total_fetches,
+    .map((fp) => ({
+      name: fp.name,
+      hazards: fp.hazards,
     }))
     .sort((a, b) => b.hazards - a.hazards);
 
@@ -249,11 +255,13 @@ export function RSSStatistics() {
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button disabled={processMutation.isPending}>
-              {processMutation.isPending ? (
+            <Button disabled={isProcessing}>
+              {isProcessing ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  {currentJob?.has_running_job 
+                    ? `Processing... (${currentJob.progress?.processed || 0}/${currentJob.progress?.total || 0})`
+                    : 'Starting...'}
                 </>
               ) : (
                 <>

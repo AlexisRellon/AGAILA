@@ -37,9 +37,11 @@ export const rssQueryKeys = {
   all: ['rss'] as const,
   feeds: () => [...rssQueryKeys.all, 'feeds'] as const,
   feed: (id: string) => [...rssQueryKeys.feeds(), id] as const,
-  logs: (filters?: { feed_url?: string; status?: string; limit?: number }) =>
+  logs: (filters?: { feed_url?: string; status?: string; limit?: number; page?: number }) =>
     [...rssQueryKeys.all, 'logs', filters] as const,
   statistics: () => [...rssQueryKeys.all, 'statistics'] as const,
+  currentJob: () => [...rssQueryKeys.all, 'currentJob'] as const,
+  feedPerformance: () => [...rssQueryKeys.all, 'feedPerformance'] as const,
   articles: (filters?: RSSArticlesFilter) => [...rssQueryKeys.all, 'articles', filters] as const,
   article: (id: string) => [...rssQueryKeys.all, 'articles', id] as const,
 };
@@ -105,9 +107,11 @@ async function deleteFeed(id: string): Promise<{ message: string }> {
 }
 
 interface ProcessFeedsResponse {
-  status: 'processing' | 'completed';
+  status: 'processing' | 'completed' | 'queued';
   message: string;
   feeds_count: number;
+  task_id?: string;
+  job_id?: string;
   feeds?: Array<{ id: string; name: string }>;
   note?: string;
   results?: unknown[];
@@ -122,17 +126,84 @@ async function processFeeds(
   });
 }
 
+// Current Job Status Types
+export interface ProcessingJob {
+  id: string;
+  started_by: string | null;
+  started_by_email: string;
+  started_at: string;
+  completed_at: string | null;
+  status: 'idle' | 'running' | 'completed' | 'cancelled' | 'failed';
+  total_feeds: number;
+  processed_feeds: number;
+  hazards_detected: number;
+  errors_encountered: number;
+  error_message: string | null;
+  processing_details: Record<string, unknown>;
+}
+
+export interface CurrentJobResponse {
+  has_running_job: boolean;
+  job: ProcessingJob | null;
+  status: 'idle' | 'running' | 'completed' | 'cancelled' | 'failed';
+  progress?: {
+    processed: number;
+    total: number;
+    hazards: number;
+    errors: number;
+  };
+  last_completed_at?: string;
+  message?: string;
+}
+
+async function getCurrentJob(): Promise<CurrentJobResponse> {
+  return fetchAPI<CurrentJobResponse>('/current-job');
+}
+
+// Feed Performance Data for Charts
+export interface FeedPerformance {
+  id: string;
+  name: string;
+  feed_url: string;
+  hazards: number;
+  fetches: number;
+}
+
+async function getFeedPerformance(): Promise<FeedPerformance[]> {
+  return fetchAPI<FeedPerformance[]>('/feed-performance');
+}
+
 async function getLogs(filters?: {
   feed_url?: string;
   status?: string;
   limit?: number;
-}): Promise<{ logs: ProcessingLog[]; total: number }> {
+  page?: number;
+  offset?: number;
+}): Promise<{ 
+  logs: ProcessingLog[]; 
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  has_next: boolean;
+  has_prev: boolean;
+}> {
   const params = new URLSearchParams();
   if (filters?.feed_url) params.append('feed_url', filters.feed_url);
   if (filters?.status) params.append('status', filters.status);
   if (filters?.limit) params.append('limit', filters.limit.toString());
+  if (filters?.page) params.append('page', filters.page.toString());
+  if (filters?.offset) params.append('offset', filters.offset.toString());
 
-  return fetchAPI<{ logs: ProcessingLog[]; total: number }>(
+  return fetchAPI<{ 
+    logs: ProcessingLog[]; 
+    total: number;
+    page: number;
+    pages: number;
+    limit: number;
+    has_next: boolean;
+    has_prev: boolean;
+  }>(
     `/logs${params.toString() ? `?${params.toString()}` : ''}`
   );
 }
@@ -287,10 +358,34 @@ export function useProcessRSSFeeds() {
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.feeds() });
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.logs() });
       queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.currentJob() });
       toast.success(`Processing ${data.feeds_count} feeds in background. Check logs for results.`);
     },
     onError: (error: Error) => {
-      toast.error(`Failed to start processing: ${error.message}`);
+      // Check if error is a 409 conflict (job already running)
+      if (error.message.includes('already in progress')) {
+        toast.warning('RSS processing is already in progress. Please wait for it to complete.');
+      } else {
+        toast.error(`Failed to start processing: ${error.message}`);
+      }
+    },
+  });
+}
+
+/**
+ * Fetch current processing job status
+ * Used to check if processing is in progress and disable the button
+ */
+export function useCurrentProcessingJob() {
+  return useQuery({
+    queryKey: rssQueryKeys.currentJob(),
+    queryFn: getCurrentJob,
+    staleTime: 5 * 1000, // 5 seconds - refresh frequently when checking status
+    gcTime: 30 * 1000,
+    refetchInterval: (query) => {
+      // Refetch every 3 seconds if there's a running job, otherwise every 30 seconds
+      const data = query.state.data as CurrentJobResponse | undefined;
+      return data?.has_running_job ? 3000 : 30000;
     },
   });
 }
@@ -303,6 +398,7 @@ export function useProcessingLogs(filters?: {
   feed_url?: string;
   status?: string;
   limit?: number;
+  page?: number;
 }) {
   return useQuery({
     queryKey: rssQueryKeys.logs(filters),
@@ -324,6 +420,20 @@ export function useRSSStatistics() {
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 5 * 60 * 1000,
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds
+  });
+}
+
+/**
+ * Fetch feed performance data for charts
+ * Returns actual hazard counts per feed from hazards table
+ */
+export function useFeedPerformance() {
+  return useQuery({
+    queryKey: rssQueryKeys.feedPerformance(),
+    queryFn: getFeedPerformance,
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 60 * 1000, // Auto-refetch every minute
   });
 }
 
@@ -405,6 +515,40 @@ async function bulkDeleteRSSArticles(ids: string[]): Promise<{
   }>('/articles/bulk-delete', {
     method: 'POST',
     body: JSON.stringify({ ids }),
+  });
+}
+
+/**
+ * Update an RSS article
+ */
+export interface ArticleUpdateData {
+  status?: 'active' | 'resolved' | 'archived';
+  validated?: boolean;
+  validation_notes?: string;
+  hazard_type?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+}
+
+async function updateRSSArticle(
+  id: string,
+  data: ArticleUpdateData
+): Promise<RSSArticle> {
+  return fetchAPI<RSSArticle>(`/articles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Validate an RSS article (quick action)
+ */
+async function validateRSSArticle(
+  id: string,
+  notes?: string
+): Promise<RSSArticle> {
+  const params = notes ? `?validation_notes=${encodeURIComponent(notes)}` : '';
+  return fetchAPI<RSSArticle>(`/articles/${id}/validate${params}`, {
+    method: 'POST',
   });
 }
 
@@ -491,6 +635,47 @@ export function useBulkDeleteRSSArticles() {
     },
     onError: (error: Error) => {
       toast.error(`Bulk delete failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to update an RSS article
+ * Uses optimistic update for immediate UI feedback
+ */
+export function useUpdateRSSArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ArticleUpdateData }) =>
+      updateRSSArticle(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.articles() });
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
+      toast.success('Article updated successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(`Update failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Hook to validate an RSS article (quick action)
+ */
+export function useValidateRSSArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, notes }: { id: string; notes?: string }) =>
+      validateRSSArticle(id, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.articles() });
+      queryClient.invalidateQueries({ queryKey: rssQueryKeys.statistics() });
+      toast.success('Article validated successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(`Validation failed: ${error.message}`);
     },
   });
 }

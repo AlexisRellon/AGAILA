@@ -90,6 +90,8 @@ import {
   useDeleteRSSArticle,
   useBulkDeleteRSSArticles,
   useRSSFeeds,
+  useUpdateRSSArticle,
+  useValidateRSSArticle,
 } from '../../../hooks/useRSS';
 import { RSSArticle, RSSArticlesFilter } from '../../../types/rss';
 
@@ -142,6 +144,8 @@ function formatDate(dateString: string | null) {
 
 interface TableMeta {
   setDeletingArticle: (article: RSSArticle | null) => void;
+  handleValidate: (article: RSSArticle) => void;
+  handleStatusChange: (article: RSSArticle, status: 'active' | 'resolved' | 'archived') => void;
 }
 
 // ============================================================================
@@ -355,7 +359,8 @@ const columns: ColumnDef<RSSArticle>[] = [
     enableHiding: false,
     cell: ({ row, table }) => {
       const article = row.original;
-      const { setDeletingArticle } = table.options.meta as TableMeta;
+      const { setDeletingArticle, handleValidate, handleStatusChange } = table.options.meta as TableMeta;
+      const isValidated = article.validated;
 
       return (
         <DropdownMenu>
@@ -367,6 +372,38 @@ const columns: ColumnDef<RSSArticle>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            
+            {/* Validation Actions */}
+            {!isValidated && (
+              <DropdownMenuItem
+                onClick={() => handleValidate(article)}
+                className="text-green-600"
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Validate
+              </DropdownMenuItem>
+            )}
+            
+            {/* Status Change Actions */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Change Status</DropdownMenuLabel>
+            {article.status !== 'active' && (
+              <DropdownMenuItem onClick={() => handleStatusChange(article, 'active')}>
+                Mark Active
+              </DropdownMenuItem>
+            )}
+            {article.status !== 'resolved' && (
+              <DropdownMenuItem onClick={() => handleStatusChange(article, 'resolved')}>
+                Mark Resolved
+              </DropdownMenuItem>
+            )}
+            {article.status !== 'archived' && (
+              <DropdownMenuItem onClick={() => handleStatusChange(article, 'archived')}>
+                Archive
+              </DropdownMenuItem>
+            )}
+            
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => navigator.clipboard.writeText(article.source_url)}
             >
@@ -412,6 +449,8 @@ export function RSSArticlesManager() {
   const { data: feeds = [] } = useRSSFeeds();
   const deleteMutation = useDeleteRSSArticle();
   const bulkDeleteMutation = useBulkDeleteRSSArticles();
+  const updateMutation = useUpdateRSSArticle();
+  const validateMutation = useValidateRSSArticle();
 
   const articles = data?.articles || [];
   const totalCount = data?.total || 0;
@@ -455,6 +494,14 @@ export function RSSArticlesManager() {
     setShowBulkDeleteDialog(false);
   };
 
+  const handleValidate = (article: RSSArticle) => {
+    validateMutation.mutate({ id: article.id });
+  };
+
+  const handleStatusChange = (article: RSSArticle, status: 'active' | 'resolved' | 'archived') => {
+    updateMutation.mutate({ id: article.id, data: { status } });
+  };
+
   const handleFilterChange = (key: keyof RSSArticlesFilter, value: string | boolean | undefined) => {
     setFilters((prev) => ({
       ...prev,
@@ -488,6 +535,8 @@ export function RSSArticlesManager() {
     },
     meta: {
       setDeletingArticle,
+      handleValidate,
+      handleStatusChange,
     } as TableMeta,
   });
 
