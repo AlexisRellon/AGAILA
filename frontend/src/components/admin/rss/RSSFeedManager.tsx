@@ -495,7 +495,7 @@ export function RSSFeedManager() {
     setFormData({
       feed_url: feed.feed_url,
       feed_name: feed.feed_name,
-      feed_category: feed.feed_category,
+      feed_category: feed.feed_category || '',
       priority: feed.priority,
       fetch_interval_minutes: feed.fetch_interval_minutes,
       is_active: feed.is_active,

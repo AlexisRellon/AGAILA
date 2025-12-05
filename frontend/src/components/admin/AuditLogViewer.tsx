@@ -41,16 +41,22 @@ interface AuditLog {
   id: string;
   user_email: string | null;
   user_role: string | null;
+  user_id?: string | null;
   action: string;
-  action_description: string;
+  action_description: string | null;
   resource_type: string | null;
   resource_id: string | null;
-  old_values: Record<string, unknown> | null;
-  new_values: Record<string, unknown> | null;
+  old_values: Record<string, unknown>;
+  new_values: Record<string, unknown>;
   ip_address: string | null;
   user_agent: string | null;
   success: boolean;
   error_message: string | null;
+  event_type?: string | null;
+  severity?: string;
+  status: string;
+  message?: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -122,7 +128,7 @@ const AuditLogViewer: React.FC = () => {
             {info.getValue()}
           </Badge>
           <span className="text-xs text-muted-foreground line-clamp-2">
-            {info.row.original.action_description}
+            {info.row.original.action_description || '-'}
           </span>
         </div>
       ),

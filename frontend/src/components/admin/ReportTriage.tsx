@@ -506,6 +506,7 @@ const ReportTriage: React.FC = () => {
 
   const confirmAction = async () => {
     if (!selectedReport || !actionType) {
+      // eslint-disable-next-line no-console
       console.log('[ReportTriage] No selected report or action type');
       return;
     }
@@ -515,35 +516,41 @@ const ReportTriage: React.FC = () => {
       return;
     }
 
+    // eslint-disable-next-line no-console
     console.log(`[ReportTriage] Starting ${actionType} for report:`, selectedReport.tracking_id);
     setIsProcessing(true);
-
+    
     try {
       // Call backend validate/reject endpoint
+      // eslint-disable-next-line no-console
       console.log(`[ReportTriage] Calling adminApi.reports.${actionType}...`);
       
       if (actionType === 'validate') {
         const payload: { latitude?: number; longitude?: number } = {};
-
+        
         if (editedCoordinates && coordinatesChanged) {
           payload.latitude = Number(editedCoordinates.lat.toFixed(6));
           payload.longitude = Number(editedCoordinates.lng.toFixed(6));
         }
-
+        
         const result = await adminApi.reports.validate(
           selectedReport.tracking_id,
           Object.keys(payload).length ? payload : undefined
         );
+        // eslint-disable-next-line no-console
         console.log('[ReportTriage] Validate result:', result);
       } else {
         const result = await adminApi.reports.reject(selectedReport.tracking_id);
+        // eslint-disable-next-line no-console
         console.log('[ReportTriage] Reject result:', result);
       }
-
+      
+      // eslint-disable-next-line no-console
       console.log('[ReportTriage] Refetching reports...');
       // Refresh reports using React Query refetch
       await refetch();
-
+      
+      // eslint-disable-next-line no-console
       console.log('[ReportTriage] Closing dialog');
       setIsActionDialogOpen(false);
       setSelectedReport(null);
@@ -604,7 +611,7 @@ const ReportTriage: React.FC = () => {
             <Select
               value={minConfidence?.toString() || 'none'}
               onValueChange={(value) => setMinConfidence(value === 'none' ? undefined : parseFloat(value))}
-            >
+              >
               <SelectTrigger>
                 <SelectValue placeholder="Min confidence" />
               </SelectTrigger>
@@ -620,7 +627,7 @@ const ReportTriage: React.FC = () => {
             <Select
               value={maxConfidence?.toString() || 'none'}
               onValueChange={(value) => setMaxConfidence(value === 'none' ? undefined : parseFloat(value))}
-            >
+              >
               <SelectTrigger>
                 <SelectValue placeholder="Max confidence" />
               </SelectTrigger>
@@ -647,7 +654,7 @@ const ReportTriage: React.FC = () => {
               size="sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-            >
+              >
               Previous
             </Button>
             <span className="text-sm">
@@ -658,7 +665,7 @@ const ReportTriage: React.FC = () => {
               size="sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-            >
+              >
               Next
             </Button>
           </div>
