@@ -67,8 +67,12 @@ type NavItem = {
   requiresRole?: UserRole[];
 };
 
-// Navigation structure
+// Navigation structure with role-based access control
+// Responders: View Jurisdiction Hazards, Receive Real-time Notifications, Update Hazard Status, Export Report
+// Validator: Includes Responder + View Triage Queue, Verify Citizen report/reject Report, Validate AI Predictions, View Audit Logs
+// Admin: Includes Responders + Validator + Configure System Settings/Manage RSS Feeds, Monitor System Health, Manage Users
 const navigationItems: NavItem[] = [
+  // Available to all authenticated users (Responders, Validators, Admins)
   {
     title: 'Analytics',
     icon: BarChart3,
@@ -79,12 +83,7 @@ const navigationItems: NavItem[] = [
     icon: MapPin,
     view: 'map',
   },
-  {
-    title: 'User Management',
-    icon: Users,
-    view: 'users',
-    requiresAdmin: true,
-  },
+  // Validator and Admin only
   {
     title: 'Report Triage',
     icon: Shield,
@@ -92,15 +91,28 @@ const navigationItems: NavItem[] = [
     requiresRole: ['master_admin', 'validator'],
   },
   {
-    title: 'RSS Feeds',
-    icon: Rss,
-    view: 'rss',
-    requiresRole: ['master_admin', 'validator'],
-  },
-  {
     title: 'Audit Logs',
     icon: FileText,
     view: 'audit',
+    requiresRole: ['master_admin', 'validator'],
+  },
+  {
+    title: 'Activity Monitor',
+    icon: Activity,
+    view: 'activity',
+    requiresRole: ['master_admin', 'validator'],
+  },
+  // Admin only
+  {
+    title: 'User Management',
+    icon: Users,
+    view: 'users',
+    requiresAdmin: true,
+  },
+  {
+    title: 'RSS Feeds',
+    icon: Rss,
+    view: 'rss',
     requiresAdmin: true,
   },
   {
@@ -108,12 +120,6 @@ const navigationItems: NavItem[] = [
     icon: Settings,
     view: 'config',
     requiresAdmin: true,
-  },
-  {
-    title: 'Activity Monitor',
-    icon: Activity,
-    view: 'activity',
-    requiresRole: ['master_admin', 'validator'],
   },
 ];
 

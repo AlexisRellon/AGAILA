@@ -211,7 +211,7 @@ async def get_all_users(
     organization: Optional[str] = Query(None, description="Filter by organization"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: UserContext = Depends(require_validator)
+    current_user: UserContext = Depends(require_validator, )
 ):
     """
     Get all user accounts with optional filtering.
@@ -997,12 +997,12 @@ async def get_recent_activity(
     limit: int = Query(50, ge=1, le=200, description="Number of recent activities to retrieve"),
     user_email: Optional[str] = Query(None, description="Filter by specific user email"),
     action_type: Optional[str] = Query(None, description="Filter by action type (e.g., 'login', 'hazard_validated')"),
-    current_user: UserContext = Depends(require_master_admin)
+    current_user: UserContext = Depends(require_validator)
 ):
     """
     Get recent user activity logs (cached for 30s)
     
-    **Permissions**: Master Admin only
+    **Permissions**: Validator and Master Admin
     **Module**: FP-04 (Activity Monitor)
     """
     cache_key = generate_cache_key("admin:activity", limit=limit, user_email=user_email, action_type=action_type)
@@ -1036,12 +1036,12 @@ async def get_audit_logs(
     severity: Optional[str] = Query(None, description="Filter by severity (info, warning, error, critical)"),
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     start_date: Optional[str] = Query(None, description="Filter logs after this date (ISO 8601)"),
-    current_user: UserContext = Depends(require_master_admin)
+    current_user: UserContext = Depends(require_validator)
 ):
     """
     Get system audit logs (cached for 60s)
     
-    **Permissions**: Master Admin only
+    **Permissions**: Validator and Master Admin
     **Module**: FP-04 (Activity Monitor)
     """
     cache_key = generate_cache_key("admin:audit", limit=limit, severity=severity, event_type=event_type, start_date=start_date)

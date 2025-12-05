@@ -175,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAdmin = useCallback((): boolean => {
     if (!userProfile) return false;
-    return ['master_admin', 'validator', 'lgu_responder'].includes(userProfile.role);
+    return userProfile.role === 'master_admin';
   }, [userProfile]);
 
   const value = {
