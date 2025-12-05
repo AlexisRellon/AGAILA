@@ -98,14 +98,21 @@ export const HeroSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Glassmorphism Card Placeholder */}
+        {/* Glassmorphism Card with Showcase Image */}
         <div
-          className="w-full max-w-[709px] h-[260px] sm:h-[340px] md:h-[415px] rounded-[24px] sm:rounded-[32px] backdrop-blur-[4.7px] bg-[rgba(26,66,224,0.2)] border border-[rgba(255,255,255,0.4)] opacity-80"
+          className="w-full max-w-[709px] h-[260px] sm:h-[340px] md:h-[415px] rounded-[24px] sm:rounded-[32px] backdrop-blur-[4.7px] bg-[rgba(26,66,224,0.2)] border border-[rgba(255,255,255,0.4)] opacity-80 overflow-hidden p-2 sm:p-3 md:p-4"
           style={{
             boxShadow:
               "inset 2.15px 1.72px 8.6px 0px rgba(255,255,255,0.15), inset 1.15px 0.92px 4.3px 0px rgba(255,255,255,0.15)",
           }}
-        />
+        >
+          <img
+            src={landingAssets.hero.showcaseImage}
+            alt="Showcase of GAIA's live hazard map with real-time data filtering and AI classification features."
+            className="w-full h-full rounded-[calc(24px-0.5rem)] sm:rounded-[calc(32px-0.75rem)]"
+
+          />
+        </div>
       </div>
     </section>
   );

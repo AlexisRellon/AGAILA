@@ -7,16 +7,22 @@ export const FeaturesSection: React.FC = () => {
       title: 'AI-Driven Classification',
       description: 'Utilizes Zero-Shot Classification to instantly understand and categorize environmental hazards from unstructured RSS feeds.',
       image: landingAssets.features.aiClassification,
+      fit: 'cover' as const,
+      backgroundColor: '',
     },
     {
       title: 'Automated Geo-NER',
       description: 'Incorporates Geo-Named Entity Recognition to automatically extract, verify, and pinpoint precise locations from text.',
       image: landingAssets.features.geoNer,
+      fit: 'cover' as const,
+      backgroundColor: '',
     },
     {
       title: 'Unified Command Dashboard',
       description: 'A multi-channel hub that visualizes all verified hazard data on an interactive map for real-time situational awareness.',
       image: landingAssets.features.commandDashboard,
+      fit: 'scale-down' as const,
+      backgroundColor: '#f0f4f7',
     },
   ];
 
@@ -43,6 +49,11 @@ export const FeaturesSection: React.FC = () => {
                 alt=""
                 aria-hidden="true"
                 className="w-full h-full object-cover"
+                style={{
+                  objectPosition: 'left',
+                  objectFit: feature.fit,
+                  backgroundColor: feature.backgroundColor,
+                }}
               />
             </div>
             <div className="flex flex-col gap-2 items-start w-full">

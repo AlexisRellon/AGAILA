@@ -17,13 +17,18 @@ export const landingAssets = {
     pinFlood: '/assets/img/Pin-flood.svg',
     pinEarthquake: '/assets/img/Pin-earthquake.svg',
     pinLandslide: '/assets/img/Pin-landslide.svg',
+    // Image Showcase
+    showcaseImage: '/assets/img/showcase-public-map.webp',
+    realTimeFiltering: '/assets/img/real-time-filtering.webp',
+    hazardDensityMap: '/assets/img/hazard-density-map.webp',
+    aiClassification: '/assets/img/ai-classification-report-feed.webp',
   },
   
   // Features Section
   features: {
-    aiClassification: '/assets/img/bg-heatmap.png',
-    geoNer: '/assets/img/bg-heatmap.png',
-    commandDashboard: '/assets/img/bg-heatmap.png',
+    aiClassification: '/assets/img/feature-ai-classification.webp',
+    geoNer: '/assets/img/feature-geo-ner.webp',
+    commandDashboard: '/assets/img/feature-command-dashboard.webp',
   },
   
   // Product Showcase Section  
