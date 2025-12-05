@@ -61,7 +61,7 @@ logs/
 Thumbs.db
 
 # AI Models (downloaded at runtime)
-models/
+models/cache
 *.pth
 *.pt
 *.onnx
