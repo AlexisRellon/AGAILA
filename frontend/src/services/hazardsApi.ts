@@ -153,12 +153,22 @@ export async function fetchValidatedHazards(
     hazardTypes?: string[];
   } = {}
 ): Promise<HazardResponse[]> {
-  return fetchHazards({
+  const params: HazardsQueryParams = {
     validated: true,
-    limit: options.limit || 100,
-    time_window_hours: options.timeWindowHours,
-    hazard_types: options.hazardTypes,
-  });
+    limit: options.limit || 1000, // Default to max limit to show all hazards
+  };
+  
+  // Only include time_window_hours if explicitly provided
+  if (options.timeWindowHours !== undefined) {
+    params.time_window_hours = options.timeWindowHours;
+  }
+  
+  // Only include hazard_types if provided
+  if (options.hazardTypes && options.hazardTypes.length > 0) {
+    params.hazard_types = options.hazardTypes;
+  }
+  
+  return fetchHazards(params);
 }
 
 /**

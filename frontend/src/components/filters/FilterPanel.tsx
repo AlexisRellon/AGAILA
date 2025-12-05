@@ -41,6 +41,7 @@ export interface FilterPanelProps {
   className?: string;
   boundarySettings?: BoundarySettings;
   onBoundarySettingsChange?: (settings: BoundarySettings) => void;
+  onExpandChange?: (expanded: boolean) => void;
 }
 
 // ============================================================================
@@ -56,6 +57,7 @@ export function FilterPanel({
     showMunicipalities: false,
   },
   onBoundarySettingsChange,
+  onExpandChange,
 }: FilterPanelProps) {
   const {
     filters,
@@ -203,6 +205,7 @@ export function FilterPanel({
             onTimeWindowChange={(window, customRange) =>
               updateFilters({ timeWindow: window, customDateRange: customRange })
             }
+            onExpandChange={onExpandChange}
           />
         )}
       </div>

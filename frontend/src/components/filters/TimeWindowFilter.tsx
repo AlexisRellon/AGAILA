@@ -33,6 +33,7 @@ export interface TimeWindowFilterProps {
   customDateRange?: CustomDateRange;
   onTimeWindowChange: (window: TimeWindow, customRange?: CustomDateRange) => void;
   disabled?: boolean;
+  onExpandChange?: (expanded: boolean) => void;
 }
 
 // ============================================================================
@@ -104,6 +105,7 @@ export function TimeWindowFilter({
   customDateRange,
   onTimeWindowChange,
   disabled = false,
+  onExpandChange,
 }: TimeWindowFilterProps) {
   const [showCustomPicker, setShowCustomPicker] = useState(timeWindow === 'custom');
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(
@@ -117,9 +119,11 @@ export function TimeWindowFilter({
   const handlePresetClick = (preset: TimeWindow) => {
     if (preset === 'custom') {
       setShowCustomPicker(true);
+      onExpandChange?.(true); // Expand sidebar for calendar
       onTimeWindowChange('custom', customDateRange);
     } else {
       setShowCustomPicker(false);
+      onExpandChange?.(false); // Collapse sidebar
       setValidationError(null);
       onTimeWindowChange(preset);
     }
@@ -155,6 +159,7 @@ export function TimeWindowFilter({
     setSelectedRange(undefined);
     setValidationError(null);
     setShowCustomPicker(false);
+    onExpandChange?.(false); // Collapse sidebar
     onTimeWindowChange('all');
   };
 
@@ -212,7 +217,7 @@ export function TimeWindowFilter({
 
         {/* Custom Date Picker */}
         {showCustomPicker && (
-          <div className="space-y-3 pt-3 border-t border-gray-200">
+          <div className="space-y-3 pt-3 border-t border-gray-200 w-full max-w-full min-w-0 overflow-hidden">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Custom Date Range
@@ -228,8 +233,26 @@ export function TimeWindowFilter({
               )}
             </div>
 
-            {/* Date Picker */}
-            <div className="flex justify-center bg-white rounded-lg border border-gray-200 p-3">
+            {/* Date Picker - Compact Calendar */}
+            <div 
+              className="w-full bg-white rounded-lg border border-gray-200 p-3 overflow-hidden"
+              style={{
+                // react-day-picker CSS custom properties for sizing
+                '--rdp-cell-size': '44px',
+                '--rdp-accent-color': '#3b82f6',
+                '--rdp-background-color': '#dbeafe',
+              } as React.CSSProperties}
+            >
+              <style>{`
+                .compact-rdp .rdp-month { width: 100%; margin: 0; }
+                .compact-rdp .rdp-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+                .compact-rdp .rdp-head_cell { padding: 8px 0; font-size: 12px; font-weight: 600; color: #6b7280; text-align: center; }
+                .compact-rdp .rdp-cell { padding: 2px; text-align: center; }
+                .compact-rdp .rdp-day { width: 100%; height: 36px; font-size: 14px; border-radius: 6px; }
+                .compact-rdp .rdp-caption_label { font-size: 15px; font-weight: 600; }
+                .compact-rdp .rdp-nav_button { width: 32px; height: 32px; }
+                .compact-rdp .rdp-nav_icon { width: 14px; height: 14px; }
+              `}</style>
               <DayPicker
                 mode="range"
                 selected={selectedRange}
@@ -244,8 +267,12 @@ export function TimeWindowFilter({
                     backgroundColor: '#3b82f6',
                     color: 'white',
                   },
+                  range_middle: {
+                    backgroundColor: '#dbeafe',
+                    color: '#1e40af',
+                  },
                 }}
-                className="rdp-custom"
+                className="compact-rdp"
                 showOutsideDays
               />
             </div>

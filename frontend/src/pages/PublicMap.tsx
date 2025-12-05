@@ -122,6 +122,8 @@ const PublicMap: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isLegendVisible, setIsLegendVisible] = useState(true);
   
   // Map container ref for PDF screenshot capture
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -150,8 +152,8 @@ const PublicMap: React.FC = () => {
     try {
       setLoading(true);
       const data = await fetchValidatedHazards({
-        limit: 100,
-        timeWindowHours: 168, // Last 7 days
+        limit: 1000, // Max limit to fetch all validated hazards
+        // No timeWindowHours - fetch all validated hazards, filtering happens client-side
       });
 
       // Map API response to local Hazard interface
@@ -419,25 +421,40 @@ const PublicMap: React.FC = () => {
       {/* Main Content with Sidebar and Map */}
       <div className="flex-1 relative">
         {/* Left Sidebar - Layer Controls (Overlay) */}
+        {/* Full width on mobile, fixed width on desktop */}
         <div
           className={`${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } absolute left-0 top-0 h-full w-80 transition-transform duration-300 bg-white shadow-2xl z-[1000] overflow-hidden`}
+          } ${
+            isSidebarExpanded ? 'md:w-[420px]' : 'md:w-80'
+          } w-full md:max-w-none absolute left-0 top-0 h-full transition-all duration-300 bg-white shadow-2xl z-[1000] overflow-hidden`}
         >
           <div className="h-full overflow-y-auto">
             {/* GAIA Logo and Navigation */}
             <div className="p-4 border-b border-gray-200">
-              <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
-                <img
-                  src="/assets/img/GAIA.svg"
-                  alt="GAIA Logo"
-                  className="h-10 w-10"
-                />
-                <div>
-                  <h2 className="text-lg font-bold text-[#0a2a4d]">GAIA</h2>
-                  <p className="text-xs text-gray-600">Live Hazard Map</p>
-                </div>
-              </Link>
+              <div className="flex items-center justify-between">
+                <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+                  <img
+                    src="/assets/img/GAIA.svg"
+                    alt="GAIA Logo"
+                    className="h-10 w-10"
+                  />
+                  <div>
+                    <h2 className="text-lg font-bold text-[#0a2a4d]">GAIA</h2>
+                    <p className="text-xs text-gray-600">Live Hazard Map</p>
+                  </div>
+                </Link>
+                {/* Close button - visible on mobile */}
+                <button
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Close sidebar"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Search Location */}
@@ -507,6 +524,7 @@ const PublicMap: React.FC = () => {
               <FilterPanel 
                 hazards={hazards}
                 className="h-full"
+                onExpandChange={setIsSidebarExpanded}
               />
             </div>
 
@@ -526,10 +544,13 @@ const PublicMap: React.FC = () => {
         </div>
 
         {/* Sidebar Toggle Button */}
+        {/* Hidden on mobile when sidebar is open (use X button inside instead) */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className={`${
-            isSidebarOpen ? 'left-80' : 'left-0'
+            isSidebarOpen 
+              ? `hidden md:block ${isSidebarExpanded ? 'md:left-[420px]' : 'md:left-80'}` 
+              : 'block left-0'
           } absolute top-[6rem] z-[1001] bg-white shadow-md rounded-r-md p-2 hover:bg-gray-50 transition-all duration-300`}
           aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
@@ -548,7 +569,13 @@ const PublicMap: React.FC = () => {
         {/* Map Container - Full Screen */}
         <div ref={mapContainerRef} className="absolute inset-0" id="public-map-container">
           {/* Floating UI Controls Container - Top Right */}
-          <div className="absolute top-56 right-4 z-[1000] space-y-4" data-map-control="true">
+          {/* Hidden on mobile when sidebar is open for better UX */}
+          <div 
+            className={`absolute top-56 right-4 z-[1000] space-y-4 transition-opacity duration-300 ${
+              isSidebarOpen ? 'hidden md:block' : 'block'
+            }`} 
+            data-map-control="true"
+          >
             {/* Report Generator Button (RG-02) - Only for authenticated users */}
             {user && (
               <ReportGenerator 
@@ -563,44 +590,62 @@ const PublicMap: React.FC = () => {
             {/* Legend Card */}
             <Card className="bg-white/95 backdrop-blur-sm shadow-lg max-w-xs map-legend">
               <div className="p-3">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-700">Legend</h3>
-                  <Badge variant="outline" className="text-xs">
-                    {filteredHazards.length} active
-                  </Badge>
-                </div>
-                <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
-                  {Object.entries(hazardIcons).map(([key, { icon: Icon, color }]) => {
-                    const count = filteredHazards.filter(h => h.hazard_type === key).length;
-                    const hasCount = count > 0;
-                    return (
-                      <div
-                        key={key}
-                        className={`flex items-center justify-between p-1.5 rounded ${
-                          hasCount ? 'hover:bg-gray-50' : 'opacity-50'
-                        }`}
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {filteredHazards.length} active
+                    </Badge>
+                    <button
+                      onClick={() => setIsLegendVisible(!isLegendVisible)}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      aria-label={isLegendVisible ? 'Hide legend' : 'Show legend'}
+                    >
+                      <svg
+                        className={`w-4 h-4 text-gray-500 transition-transform ${isLegendVisible ? '' : 'rotate-180'}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <div className="flex items-center space-x-2">
-                          <div 
-                            className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0"
-                            style={{ backgroundColor: `${color}20`, color: hasCount ? color : '#9ca3af' }}
-                          >
-                            <Icon size={16} strokeWidth={2.5} />
-                          </div>
-                          <span className={`text-xs ${hasCount ? 'text-gray-700' : 'text-gray-400'}`}>
-                            {hazardLabels[key]}
-                          </span>
-                        </div>
-                        <Badge 
-                          variant={hasCount ? "secondary" : "outline"} 
-                          className="text-xs h-5"
-                        >
-                          {count}
-                        </Badge>
-                      </div>
-                    );
-                  })}
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+                {isLegendVisible && (
+                  <div className="space-y-1.5 max-h-[400px] overflow-y-auto mt-3">
+                    {Object.entries(hazardIcons).map(([key, { icon: Icon, color }]) => {
+                      const count = filteredHazards.filter(h => h.hazard_type === key).length;
+                      const hasCount = count > 0;
+                      return (
+                        <div
+                          key={key}
+                          className={`flex items-center justify-between p-1.5 rounded ${
+                            hasCount ? 'hover:bg-gray-50' : 'opacity-50'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div 
+                              className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0"
+                              style={{ backgroundColor: `${color}20`, color: hasCount ? color : '#9ca3af' }}
+                            >
+                              <Icon size={16} strokeWidth={2.5} />
+                            </div>
+                            <span className={`text-xs ${hasCount ? 'text-gray-700' : 'text-gray-400'}`}>
+                              {hazardLabels[key]}
+                            </span>
+                          </div>
+                          <Badge 
+                            variant={hasCount ? "secondary" : "outline"} 
+                            className="text-xs h-5"
+                          >
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -821,7 +866,11 @@ const PublicMap: React.FC = () => {
           </MapContainer>
           
           {/* Map Controls (GV-03, GV-04) */}
-          <div data-map-control="true">
+          {/* Hidden on mobile when sidebar is open */}
+          <div 
+            className={`${isSidebarOpen ? 'hidden md:block' : 'block'}`}
+            data-map-control="true"
+          >
             <MapControls
               clusteringEnabled={clusteringEnabled}
               onToggleClustering={setClusteringEnabled}
@@ -838,7 +887,7 @@ const PublicMap: React.FC = () => {
       </div>
 
       {/* Stats Footer */}
-      <footer className="bg-white border-t border-gray-200 py-3 z-[9999]" data-realtime-footer="true">
+      <footer className="bg-white border-t border-gray-200 py-2 md:py-3 z-[9999]" data-realtime-footer="true">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <div>

@@ -466,6 +466,11 @@ async def process_rss_feeds(
             except Exception:
                 pass
             
+            # Ensure started_by is never null (use system user if no authenticated user)
+            if not user_id:
+                user_id = '00000000-0000-0000-0000-000000000000'  # System user UUID
+                user_email = 'system@gaia.local'
+            
             job_data = {
                 'started_by': user_id,
                 'started_by_email': user_email,

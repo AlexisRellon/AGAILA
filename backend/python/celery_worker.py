@@ -85,10 +85,10 @@ def process_rss_feeds_task(self):
         from backend.python.pipeline.rss_processor_enhanced import rss_processor_enhanced
         import asyncio
         
-        # Find and update the job record for this task
+        # Find or create job record for this task
         job_id = None
         try:
-            # Find job with this task_id
+            # Try to find existing job with this task_id
             jobs = supabase.schema('gaia').table('rss_processing_jobs') \
                 .select('*') \
                 .eq('status', 'running') \
@@ -98,9 +98,30 @@ def process_rss_feeds_task(self):
             
             if jobs.data:
                 job_id = jobs.data[0]['id']
-                logger.info(f"Found job record: {job_id}")
+                logger.info(f"Found existing job record: {job_id}")
+            else:
+                # No existing job found - create one for auto-processing (Celery Beat)
+                # This happens when task is triggered automatically, not via API
+                logger.info("No existing job record found - creating new job for auto-processing")
+                job_data = {
+                    'started_by': '00000000-0000-0000-0000-000000000000',  # System user UUID
+                    'started_by_email': 'system@gaia.local',
+                    'status': 'running',
+                    'total_feeds': 0,  # Will be updated when feeds are fetched
+                    'processed_feeds': 0,
+                    'hazards_detected': 0,
+                    'errors_encountered': 0,
+                    'processing_details': {
+                        'task_id': self.request.id,
+                        'triggered_by': 'celery_beat_auto'
+                    }
+                }
+                job_result = supabase.schema('gaia').table('rss_processing_jobs').insert(job_data).execute()
+                if job_result.data:
+                    job_id = job_result.data[0]['id']
+                    logger.info(f"Created new job record: {job_id}")
         except Exception as job_err:
-            logger.warning(f"Could not find job record: {job_err}")
+            logger.warning(f"Could not find or create job record: {job_err}")
         
         # Get active feeds from database
         feeds_result = supabase.schema('gaia').table('rss_feeds') \

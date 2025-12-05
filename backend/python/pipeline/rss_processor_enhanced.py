@@ -441,8 +441,9 @@ class RSSProcessorEnhanced:
         
         Strategies:
         1. Exact URL match (fastest, most reliable)
-        2. Content hash match within time window
-        3. Geographic + temporal proximity (5km radius, time window)
+        2. Article title match within time window
+        3. Content hash match within time window
+        4. Geographic + temporal proximity (5km radius, time window)
         
         Args:
             url: Article URL
@@ -459,7 +460,23 @@ class RSSProcessorEnhanced:
                 if response.data:
                     return True, response.data[0]['id']
             
-            # Strategy 2: Check content hash within time window
+            # Strategy 2: Check article title within time window
+            if content_data.get('title'):
+                time_threshold = datetime.utcnow() - timedelta(hours=self.duplicate_time_window)
+                # Normalize title: lowercase, remove extra whitespace
+                normalized_title = ' '.join(content_data['title'].lower().split())
+                
+                response = supabase.schema('gaia').from_('hazards') \
+                    .select('id') \
+                    .eq('source_title', normalized_title) \
+                    .gte('detected_at', time_threshold.isoformat()) \
+                    .limit(1) \
+                    .execute()
+                
+                if response.data:
+                    return True, response.data[0]['id']
+            
+            # Strategy 3: Check content hash within time window
             content_hash = self._generate_content_hash(content_data)
             time_threshold = datetime.utcnow() - timedelta(hours=self.duplicate_time_window)
             
@@ -473,7 +490,7 @@ class RSSProcessorEnhanced:
             if response.data:
                 return True, response.data[0]['id']
             
-            # Strategy 3: Location + time window (within 5km radius)
+            # Strategy 4: Location + time window (within 5km radius)
             if location and location.get('latitude') and location.get('longitude'):
                 # Use PostGIS function to find nearby hazards
                 response = supabase.schema('gaia').rpc(
@@ -562,7 +579,8 @@ class RSSProcessorEnhanced:
                 'drought': 'drought',
                 'tsunami': 'tsunami',
                 'storm surge': 'storm_surge',
-                'tornado': 'tornado'
+                'tornado': 'tornado',
+                'other': 'other'  # Explicit mapping for other category
             }
             db_hazard_type = hazard_type_mapping.get(
                 classification['hazard_type'].lower(),
@@ -576,6 +594,9 @@ class RSSProcessorEnhanced:
             
             if auto_validated:
                 logger.info(f"Auto-validating hazard (confidence: {confidence_score:.4f} >= threshold: {rss_threshold})")
+            
+            # Normalize title for consistent duplicate detection (lowercase, remove extra whitespace)
+            normalized_title = ' '.join(content_data['title'].lower().split()) if content_data.get('title') else ''
             
             # Build hazard data for database
             hazard_data = {
@@ -591,7 +612,7 @@ class RSSProcessorEnhanced:
                 'model_version': classifier.get_active_model(),
                 'source_type': 'rss',
                 'source_url': entry.get('link', ''),
-                'source_title': content_data['title'],
+                'source_title': normalized_title,  # Store normalized for duplicate detection
                 'source_content': content_data['text'][:1000],  # Limit to 1000 chars
                 'source_published_at': published_date.isoformat() if published_date else None,
                 'validated': auto_validated,  # Auto-validate if above threshold
