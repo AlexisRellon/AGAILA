@@ -13,7 +13,7 @@
  * - Accessibility support (keyboard navigation, screen readers)
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 // import { Turnstile } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
 // import type { TurnstileInstance } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
@@ -84,12 +84,41 @@ const CitizenReportForm: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  /** When set, user is rate-limited until this timestamp (ms). Drives live countdown. */
+  const [rateLimitRetryAt, setRateLimitRetryAt] = useState<number | null>(null);
 
   // Character counts
   const descriptionLength = formData.description.length;
   const descriptionMax = 1000;
   const locationNameMax = 200;
   const nameMax = 100;
+
+  // Live countdown when rate-limited (updates every second)
+  useEffect(() => {
+    if (rateLimitRetryAt == null) return;
+    const formatRemaining = (sec: number): string => {
+      if (sec <= 0) return '0 sec';
+      const min = Math.floor(sec / 60);
+      const s = sec % 60;
+      if (min > 0) return `${min} min ${s} sec`;
+      return `${s} sec`;
+    };
+    const tick = () => {
+      const remaining = Math.ceil((rateLimitRetryAt - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setRateLimitRetryAt(null);
+        setErrors(prev => ({ ...prev, submit: undefined }));
+        return;
+      }
+      setErrors(prev => ({
+        ...prev,
+        submit: `Too many report submissions. You can submit again in ${formatRemaining(remaining)}.`,
+      }));
+    };
+    tick(); // run immediately
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [rateLimitRetryAt]);
 
   // ============================================================================
   // VALIDATION
@@ -232,7 +261,21 @@ const CitizenReportForm: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to submit report');
+        const detail = errorData.detail;
+        if (response.status === 429) {
+          const retryAfter = typeof detail === 'object' && detail?.retry_after != null
+            ? Number(detail.retry_after)
+            : 60;
+          const retryAt = Date.now() + retryAfter * 1000;
+          setRateLimitRetryAt(retryAt);
+          setErrors(prev => ({
+            ...prev,
+            submit: `Too many report submissions. You can submit again in ${retryAfter} sec.`,
+          }));
+          setIsSubmitting(false);
+          return;
+        }
+        throw new Error(typeof detail === 'string' ? detail : detail?.message || 'Failed to submit report');
       }
 
       const result = await response.json();
@@ -561,7 +604,7 @@ const CitizenReportForm: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || rateLimitRetryAt != null}
                 className="flex items-center gap-2 px-6 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (

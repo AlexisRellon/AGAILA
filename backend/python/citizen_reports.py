@@ -11,13 +11,16 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict
 import httpx
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Request
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Request, Depends
 from pydantic import BaseModel, Field, validator
 
 # Add parent directory to path for lib imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.supabase_client import supabase
+
+# Rate limiting to prevent report spam (CR-03)
+from backend.python.middleware.redis_rate_limiter import RateLimitCitizenReport, get_redis
 
 # Import ActivityLogger for comprehensive activity tracking
 from backend.python.middleware.activity_logger import ActivityLogger
@@ -139,9 +142,23 @@ async def verify_turnstile(token: str, remoteip: Optional[str] = None) -> dict:
 # API ENDPOINTS
 # =============================================================================
 
+# Per-IP cooldown (seconds) between report submissions to prevent burst spam
+SUBMISSION_COOLDOWN_SECONDS = 180  # 3 minutes
+
+
+def _get_client_identifier(request: Request) -> str:
+    """Get client identifier for cooldown (IP)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    ip = forwarded.split(",")[0].strip() if forwarded else (
+        request.client.host if request.client else "unknown"
+    )
+    return f"ip:{ip}"
+
+
 @router.post("/submit", response_model=ReportSubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_citizen_report(
     request: Request,
+    _rate_limit: None = Depends(RateLimitCitizenReport),
     # captcha_token: str = Form(..., description="Cloudflare Turnstile token"),  # TEMPORARILY DISABLED
     captcha_token: Optional[str] = Form(None, description="Cloudflare Turnstile token (optional)"),
     hazard_type: str = Form(..., description="Type of hazard"),
@@ -204,6 +221,27 @@ async def submit_citizen_report(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please provide a valid Philippine phone number (e.g., 09123456789, +63 912 345 6789)"
         )
+    
+    # Cooldown: prevent same IP from submitting again within SUBMISSION_COOLDOWN_SECONDS
+    redis_client = get_redis()
+    if redis_client:
+        identifier = _get_client_identifier(request)
+        cooldown_key = f"citizen_report_cooldown:{identifier}"
+        try:
+            if redis_client.exists(cooldown_key):
+                ttl = redis_client.ttl(cooldown_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "error": "Submission cooldown",
+                        "message": "Please wait before submitting another report. This helps prevent spam.",
+                        "retry_after": max(1, ttl),
+                    },
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Cooldown check failed (continuing): {e}")
     
     # 1. Verify Turnstile - TEMPORARILY DISABLED
     # try:
@@ -466,6 +504,14 @@ async def submit_citizen_report(
             )
         except Exception:
             logger.warning("ActivityLogger failed for submit_citizen_report; continuing.")
+
+        # Set cooldown so same IP cannot submit again for SUBMISSION_COOLDOWN_SECONDS
+        if redis_client:
+            try:
+                cooldown_key = f"citizen_report_cooldown:{_get_client_identifier(request)}"
+                redis_client.setex(cooldown_key, SUBMISSION_COOLDOWN_SECONDS, "1")
+            except Exception as e:
+                logger.warning(f"Cooldown set failed (non-fatal): {e}")
 
         return ReportSubmissionResponse(
             tracking_id=tracking_id,

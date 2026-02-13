@@ -79,7 +79,7 @@ class RateLimitTier:
         "classify": (10, 60),         # 10 AI classifications per minute
         "extract_locations": (10, 60), # 10 NER extractions per minute
         "rss_process": (5, 60),       # 5 RSS processing per minute
-        "citizen_report": (3, 60),    # 3 reports per minute (prevent spam)
+        "citizen_report": (1, 300),    # 1 report per 5 minutes (prevent spam)
         "export": (2, 60),            # 2 exports per minute
         "sse_stream": (5, 300),       # 5 SSE connections per 5 minutes
     }
@@ -92,7 +92,7 @@ class RateLimitTier:
         "classify": (30, 60),         # 30 AI classifications per minute
         "extract_locations": (30, 60), # 30 NER extractions per minute
         "rss_process": (20, 60),      # 20 RSS processing per minute
-        "citizen_report": (10, 60),   # 10 reports per minute
+        "citizen_report": (1, 300),   # 1 report per 5 minutes
         "export": (10, 60),           # 10 exports per minute
         "sse_stream": (10, 300),      # 10 SSE connections per 5 minutes
     }
@@ -105,7 +105,7 @@ class RateLimitTier:
         "classify": (100, 60),        # 100 AI classifications per minute
         "extract_locations": (100, 60), # 100 NER extractions per minute
         "rss_process": (60, 60),      # 60 RSS processing per minute
-        "citizen_report": (30, 60),   # 30 reports per minute
+        "citizen_report": (1, 300),   # 1 report per 5 minutes
         "export": (30, 60),           # 30 exports per minute
         "sse_stream": (20, 300),      # 20 SSE connections per 5 minutes
     }
