@@ -15,7 +15,7 @@ Dependencies:
 - Pydantic: Data validation
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -42,6 +42,12 @@ from reportlab.platypus import (
 from reportlab.pdfgen import canvas
 from PIL import Image
 import os
+import logging
+
+from backend.python.middleware.rbac import get_current_user_optional, UserContext, UserRole, UserStatus, log_admin_action
+from backend.python.middleware.activity_logger import ActivityLogger
+
+logger = logging.getLogger(__name__)
 
 # Router prefix: main.py adds /api/v1, so this becomes /api/v1/reports
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -456,7 +462,11 @@ def generate_pdf_report(
 # ============================================================================
 
 @router.post("/generate", response_class=FileResponse)
-async def generate_report(report_request: ReportRequest):
+async def generate_report(
+    report_request: ReportRequest,
+    request: Request,
+    current_user: Optional[UserContext] = Depends(get_current_user_optional),
+):
     """
     Generate PDF hazard report
     
@@ -475,6 +485,50 @@ async def generate_report(report_request: ReportRequest):
         
         # Generate PDF
         generate_pdf_report(report_request, output_path)
+        
+        # Log activity: who generated/printed the report (FP-04 Activity Monitor)
+        try:
+            await ActivityLogger.log_activity(
+                user_context=current_user,
+                action="PRINT_REPORT",
+                request=request,
+                resource_type="report",
+                resource_id=None,
+                details={
+                    "title": report_request.metadata.title,
+                    "generated_by": report_request.metadata.generated_by,
+                    "total_hazards": report_request.metadata.total_hazards,
+                    "filename": f"gaia_hazard_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                },
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log report generation activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            audit_user = current_user or UserContext(
+                user_id="00000000-0000-0000-0000-000000000000",
+                email="anonymous",
+                role=UserRole.CITIZEN,
+                status=UserStatus.ACTIVE,
+            )
+            await log_admin_action(
+                user=audit_user,
+                action="report_printed",
+                action_description=f"Generated PDF report: {report_request.metadata.title} ({report_request.metadata.total_hazards} hazards)",
+                resource_type="reports",
+                resource_id=None,
+                old_values={},
+                new_values={
+                    "title": report_request.metadata.title,
+                    "generated_by": report_request.metadata.generated_by,
+                    "total_hazards": report_request.metadata.total_hazards,
+                },
+                request=request,
+                event_type="REPORT_PRINTED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         # Return PDF file
         filename = f"gaia_hazard_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"

@@ -30,6 +30,9 @@ from backend.python.lib.supabase_client import supabase
 # Import ActivityLogger for comprehensive activity tracking  
 from backend.python.middleware.activity_logger import ActivityLogger
 
+# Import RBAC for admin-only access and audit logging
+from backend.python.middleware.rbac import require_admin, UserContext, log_admin_action
+
 logger = logging.getLogger(__name__)
 
 # Initialize router
@@ -145,7 +148,8 @@ class RSSStatisticsResponse(BaseModel):
 async def list_rss_feeds(
     request: Request,
     response: Response,
-    is_active: Optional[bool] = None
+    is_active: Optional[bool] = None,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     List all RSS feeds with statistics.
@@ -180,7 +184,8 @@ async def list_rss_feeds(
 async def create_rss_feed(
     request: Request,
     response: Response,
-    feed: RSSFeedCreate
+    feed: RSSFeedCreate,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Create a new RSS feed configuration.
@@ -221,10 +226,10 @@ async def create_rss_feed(
         
         logger.info(f"Created new RSS feed: {feed.feed_name} ({feed.feed_url})")
         
-        # Log activity for audit trail
+        # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
-                user_context=None,  # No user context in this endpoint yet
+                user_context=current_user,
                 action="RSS_FEED_CREATED",
                 request=request,
                 resource_type="rss_feeds",
@@ -237,6 +242,22 @@ async def create_rss_feed(
             )
         except Exception as log_error:
             logger.warning(f"Failed to log activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            await log_admin_action(
+                user=current_user,
+                action="rss_feed_created",
+                action_description=f"Added RSS feed: {feed.feed_name} ({feed.feed_url})",
+                resource_type="rss_feeds",
+                resource_id=result.data[0]['id'],
+                old_values={},
+                new_values={"feed_name": feed.feed_name, "feed_url": str(feed.feed_url), "category": feed.feed_category},
+                request=request,
+                event_type="RSS_FEED_CREATED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         return result.data[0]
         
@@ -256,7 +277,8 @@ async def update_rss_feed(
     request: Request,
     response: Response,
     feed_id: str,
-    feed: RSSFeedUpdate
+    feed: RSSFeedUpdate,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Update an existing RSS feed configuration.
@@ -288,10 +310,10 @@ async def update_rss_feed(
         
         logger.info(f"Updated RSS feed: {feed_id}")
         
-        # Log activity for audit trail
+        # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
-                user_context=None,
+                user_context=current_user,
                 action="RSS_FEED_UPDATED",
                 request=request,
                 resource_type="rss_feeds",
@@ -303,6 +325,22 @@ async def update_rss_feed(
             )
         except Exception as log_error:
             logger.warning(f"Failed to log activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            await log_admin_action(
+                user=current_user,
+                action="rss_feed_updated",
+                action_description=f"Updated RSS feed {result.data[0].get('feed_name')}: {', '.join(update_data.keys())}",
+                resource_type="rss_feeds",
+                resource_id=feed_id,
+                old_values={},
+                new_values=update_data,
+                request=request,
+                event_type="RSS_FEED_UPDATED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         return result.data[0]
         
@@ -321,7 +359,8 @@ async def update_rss_feed(
 async def delete_rss_feed(
     request: Request,
     response: Response,
-    feed_id: str
+    feed_id: str,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Delete an RSS feed configuration.
@@ -347,10 +386,10 @@ async def delete_rss_feed(
         
         logger.info(f"Deleted RSS feed: {feed_id}")
         
-        # Log activity for audit trail
+        # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
-                user_context=None,
+                user_context=current_user,
                 action="RSS_FEED_DELETED",
                 request=request,
                 resource_type="rss_feeds",
@@ -362,6 +401,22 @@ async def delete_rss_feed(
             )
         except Exception as log_error:
             logger.warning(f"Failed to log activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            await log_admin_action(
+                user=current_user,
+                action="rss_feed_deleted",
+                action_description=f"Deleted RSS feed: {feed_name} ({feed_url})",
+                resource_type="rss_feeds",
+                resource_id=feed_id,
+                old_values={"feed_name": feed_name, "feed_url": feed_url},
+                new_values={},
+                request=request,
+                event_type="RSS_FEED_DELETED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         return Response(status_code=status.HTTP_204_NO_CONTENT)
         
@@ -380,7 +435,8 @@ async def delete_rss_feed(
 async def process_rss_feeds(
     request: Request,
     response: Response,
-    process_request: ProcessRSSRequest = ProcessRSSRequest()
+    process_request: ProcessRSSRequest = ProcessRSSRequest(),
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Trigger RSS feed processing via Celery worker (non-blocking).
@@ -456,27 +512,9 @@ async def process_rss_feeds(
             task_result = process_rss_feeds_task.apply_async()
             task_id = task_result.id
             
-            # Create job record in database for tracking
-            # Get user info from request (if authenticated)
-            user_id = None
-            user_email = "system"
-            try:
-                # Try to extract user from authorization header
-                auth_header = request.headers.get('Authorization', '')
-                if auth_header.startswith('Bearer '):
-                    import jwt
-                    token = auth_header.replace('Bearer ', '')
-                    # Decode without verification just to get user info (Supabase handles auth)
-                    payload = jwt.decode(token, options={"verify_signature": False})
-                    user_id = payload.get('sub')
-                    user_email = payload.get('email', 'system')
-            except Exception:
-                pass
-            
-            # Ensure started_by is never null (use system user if no authenticated user)
-            if not user_id:
-                user_id = '00000000-0000-0000-0000-000000000000'  # System user UUID
-                user_email = 'system@gaia.local'
+            # Create job record in database for tracking (user from require_admin)
+            user_id = current_user.user_id
+            user_email = current_user.email
             
             job_data = {
                 'started_by': user_id,
@@ -494,6 +532,39 @@ async def process_rss_feeds(
             
             job_result = supabase.schema('gaia').table('rss_processing_jobs').insert(job_data).execute()
             job_id = job_result.data[0]['id'] if job_result.data else None
+            
+            # Log activity for audit trail (FP-04 Activity Monitor)
+            try:
+                await ActivityLogger.log_activity(
+                    user_context=current_user,
+                    action="RSS_PROCESSING_STARTED",
+                    request=request,
+                    resource_type="rss_feeds",
+                    resource_id=job_id,
+                    details={
+                        "task_id": task_id,
+                        "feeds_count": feeds_count,
+                        "feed_ids": [f['id'] for f in feeds],
+                    }
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log activity: {log_error}")
+
+            # Log to audit_logs for Audit Logs viewer (AC-01)
+            try:
+                await log_admin_action(
+                    user=current_user,
+                    action="rss_processing_started",
+                    action_description=f"Started RSS processing: {feeds_count} feed(s)",
+                    resource_type="rss_feeds",
+                    resource_id=job_id,
+                    old_values={},
+                    new_values={"task_id": task_id, "feeds_count": feeds_count},
+                    request=request,
+                    event_type="RSS_PROCESSING_STARTED",
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log audit: {log_error}")
             
             logger.info(f"RSS processing task dispatched to Celery: Task ID = {task_id}, Job ID = {job_id}")
             

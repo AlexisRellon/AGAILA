@@ -845,6 +845,22 @@ async def validate_citizen_report(
             )
         except Exception as log_error:
             logger.warning(f"Failed to log activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            await log_admin_action(
+                user=current_user,
+                action="report_validated",
+                action_description=f"Approved citizen report {tracking_id} ({report['hazard_type']} at {report['location_name']})",
+                resource_type="citizen_reports",
+                resource_id=tracking_id,
+                old_values={"status": report.get("status", "pending")},
+                new_values={"status": "verified", "hazard_type": report["hazard_type"], "location": report["location_name"]},
+                request=request,
+                event_type="REPORT_VALIDATED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         logger.info(f"User {current_user.email} validated report {tracking_id}")
         
@@ -939,6 +955,22 @@ async def reject_citizen_report(
             )
         except Exception as log_error:
             logger.warning(f"Failed to log activity: {log_error}")
+
+        # Log to audit_logs for Audit Logs viewer (AC-01)
+        try:
+            await log_admin_action(
+                user=current_user,
+                action="report_rejected",
+                action_description=f"Rejected citizen report {tracking_id} ({report['hazard_type']} at {report['location_name']}). Reason: {request_body.notes or 'Not provided'}",
+                resource_type="citizen_reports",
+                resource_id=tracking_id,
+                old_values={"status": report.get("status", "pending")},
+                new_values={"status": "rejected", "hazard_type": report["hazard_type"], "location": report["location_name"]},
+                request=request,
+                event_type="REPORT_REJECTED",
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log audit: {log_error}")
         
         logger.info(f"User {current_user.email} rejected report {tracking_id}")
         
@@ -1028,47 +1060,6 @@ async def get_recent_activity(
         if "does not exist" in str(e) or "Could not find" in str(e):
             return []
         raise HTTPException(status_code=500, detail="Failed to fetch activity logs")
-
-
-@router.get("/audit-logs", response_model=List[AuditLogResponse])
-async def get_audit_logs(
-    limit: int = Query(100, ge=1, le=500, description="Number of audit logs to retrieve"),
-    severity: Optional[str] = Query(None, description="Filter by severity (info, warning, error, critical)"),
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    start_date: Optional[str] = Query(None, description="Filter logs after this date (ISO 8601)"),
-    current_user: UserContext = Depends(require_validator)
-):
-    """
-    Get system audit logs (cached for 60s)
-    
-    **Permissions**: Validator and Master Admin
-    **Module**: FP-04 (Activity Monitor)
-    """
-    cache_key = generate_cache_key("admin:audit", limit=limit, severity=severity, event_type=event_type, start_date=start_date)
-    
-    async def fetch_audit():
-        query = supabase.schema("gaia").from_("audit_logs").select("*")
-        
-        if severity:
-            query = query.eq("severity", severity)
-        if event_type:
-            query = query.eq("event_type", event_type)
-        if start_date:
-            query = query.gte("created_at", start_date)
-        
-        response = query.order("created_at", desc=True).limit(limit).execute()
-        return response.data or []
-    
-    try:
-        data = await get_or_set(cache_key, fetch_audit, ttl=CACHE_TTLS.get("admin:audit", 60))
-        logger.info(f"Admin {current_user.email} retrieved {len(data)} audit logs")
-        return data
-        
-    except Exception as e:
-        logger.error(f"Error fetching audit logs: {str(e)}")
-        if "does not exist" in str(e) or "Could not find" in str(e):
-            return []
-        raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
 
 
 # ============================================================================

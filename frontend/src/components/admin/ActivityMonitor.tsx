@@ -61,12 +61,21 @@ async function fetchActivityLogs(): Promise<ActivityLog[]> {
   return response.json();
 }
 
-function getActionBadgeColor(action: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+/** Returns Tailwind classes for action badge to differentiate action types at a glance */
+function getActionBadgeStyle(action: string): string {
   const lower = action.toLowerCase();
-  if (lower.includes('login')) return 'default';
-  if (lower.includes('validated') || lower.includes('approved')) return 'secondary';
-  if (lower.includes('delete') || lower.includes('error')) return 'destructive';
-  return 'outline';
+  if (lower.includes('rejected') || lower.includes('delete') || lower.includes('error')) {
+    return 'bg-red-500/90 text-white border-red-600';
+  }
+  if (lower.includes('validated') || lower.includes('approved') || lower.includes('created')) {
+    return 'bg-emerald-600 text-white border-emerald-700';
+  }
+  if (lower.includes('login')) return 'bg-blue-600 text-white border-blue-700';
+  if (lower.includes('logout')) return 'bg-slate-500 text-white border-slate-600';
+  if (lower.includes('updated') || lower.includes('changed')) return 'bg-amber-600 text-white border-amber-700';
+  if (lower.includes('print')) return 'bg-teal-600 text-white border-teal-700';
+  if (lower.includes('processing') || lower.includes('started')) return 'bg-violet-600 text-white border-violet-700';
+  return 'bg-secondary text-secondary-foreground';
 }
 
 function exportToCSV(data: ActivityLog[]) {
@@ -131,7 +140,11 @@ export default function ActivityMonitor() {
     {
       accessorKey: 'action',
       header: 'Action',
-      cell: ({ row }) => <Badge variant={getActionBadgeColor(row.getValue('action'))}>{row.getValue('action')}</Badge>,
+      cell: ({ row }) => (
+        <Badge variant="outline" className={`border ${getActionBadgeStyle(String(row.getValue('action') ?? ''))}`}>
+          {row.getValue('action')}
+        </Badge>
+      ),
     },
     {
       accessorKey: 'resource_type',
@@ -281,7 +294,7 @@ export default function ActivityMonitor() {
               <div className="grid grid-cols-2 gap-4">
                 <div><p className="text-sm font-medium text-muted-foreground">User</p><p className="text-sm">{detailsDialog.log.user_email}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Role</p><p className="text-sm">{detailsDialog.log.user_role}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Action</p><Badge variant={getActionBadgeColor(detailsDialog.log.action)}>{detailsDialog.log.action}</Badge></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Action</p><Badge variant="outline" className={`border ${getActionBadgeStyle(detailsDialog.log.action)}`}>{detailsDialog.log.action}</Badge></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Timestamp</p><p className="text-sm">{format(parseISO(detailsDialog.log.timestamp), 'PPpp')}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Resource</p><p className="text-sm">{detailsDialog.log.resource_type}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Resource ID</p><p className="text-sm font-mono">{detailsDialog.log.resource_id || 'N/A'}</p></div>

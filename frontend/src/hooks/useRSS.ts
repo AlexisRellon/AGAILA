@@ -14,6 +14,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 import {
   RSSFeed,
   RSSFeedCreate,
@@ -54,13 +55,18 @@ async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
   const response = await fetch(`${RSS_API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    credentials: 'include', // Include cookies for auth
+    headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {

@@ -31,6 +31,7 @@ import { Input } from '../ui/input';
 import { Alert } from '../ui/alert';
 import { useMapScreenshot } from '../../hooks/useMapScreenshot';
 import { useHazardFilters } from '../../hooks/useHazardFilters';
+import { supabase } from '../../lib/supabase';
 import { 
   FileText, 
   Download, 
@@ -211,13 +212,16 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
         map_screenshot_base64: mapScreenshotBase64,
       };
 
-      // Step 3: Call backend API to generate PDF
+      // Step 3: Call backend API to generate PDF (include auth for activity logging)
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
       const response = await fetch(`${apiUrl}/api/v1/reports/generate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(reportRequest),
       });
 

@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Alert, AlertDescription } from '../ui/alert';
 import { TableSkeleton } from '../dashboard/AnalyticsSkeleton';
 import { adminApi } from '../../lib/api';
+import { cn } from '../../lib/utils';
 
 interface AuditLog {
   id: string;
@@ -61,6 +62,38 @@ interface AuditLog {
 }
 
 const columnHelper = createColumnHelper<AuditLog>();
+
+/** Returns Tailwind classes for action badge to differentiate action types at a glance */
+function getActionBadgeStyle(action: string): string {
+  const lower = action.toLowerCase();
+  // Destructive/negative actions - red
+  if (lower.includes('rejected') || lower.includes('deleted') || lower.includes('deactivated')) {
+    return 'bg-red-500/90 text-white border-red-600 hover:bg-red-500';
+  }
+  // Positive/approval actions - green
+  if (lower.includes('validated') || lower.includes('approved') || lower.includes('created')) {
+    return 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600';
+  }
+  // Auth - login blue, logout muted
+  if (lower.includes('login')) return 'bg-blue-600 text-white border-blue-700 hover:bg-blue-600';
+  if (lower.includes('logout')) return 'bg-slate-500 text-white border-slate-600 hover:bg-slate-500';
+  // Updates - amber
+  if (lower.includes('updated') || lower.includes('changed')) {
+    return 'bg-amber-600 text-white border-amber-700 hover:bg-amber-600';
+  }
+  // Report printing - teal
+  if (lower.includes('printed') || lower.includes('print')) {
+    return 'bg-teal-600 text-white border-teal-700 hover:bg-teal-600';
+  }
+  // RSS processing - violet
+  if (lower.includes('processing') || lower.includes('started')) {
+    return 'bg-violet-600 text-white border-violet-700 hover:bg-violet-600';
+  }
+  // Config - indigo
+  if (lower.includes('config')) return 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-600';
+  // Default
+  return 'bg-secondary text-secondary-foreground';
+}
 
 const AuditLogViewer: React.FC = () => {
   // Filter state
@@ -124,7 +157,7 @@ const AuditLogViewer: React.FC = () => {
       header: 'Action',
       cell: (info) => (
         <div className="flex flex-col max-w-xs">
-          <Badge variant="secondary" className="w-fit mb-1">
+          <Badge variant="outline" className={cn('w-fit mb-1 border', getActionBadgeStyle(String(info.getValue() ?? '')))}>
             {info.getValue()}
           </Badge>
           <span className="text-xs text-muted-foreground line-clamp-2">
@@ -261,6 +294,12 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="user_deactivated">User Deactivated</SelectItem>
                 <SelectItem value="config_updated">Config Updated</SelectItem>
                 <SelectItem value="report_validated">Report Validated</SelectItem>
+                <SelectItem value="report_rejected">Report Rejected</SelectItem>
+                <SelectItem value="report_printed">Report Printed</SelectItem>
+                <SelectItem value="rss_feed_created">RSS Feed Created</SelectItem>
+                <SelectItem value="rss_feed_updated">RSS Feed Updated</SelectItem>
+                <SelectItem value="rss_feed_deleted">RSS Feed Deleted</SelectItem>
+                <SelectItem value="rss_processing_started">RSS Processing Started</SelectItem>
               </SelectContent>
             </Select>
 
@@ -275,6 +314,8 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="system_config">System Config</SelectItem>
                 <SelectItem value="citizen_reports">Citizen Reports</SelectItem>
                 <SelectItem value="hazards">Hazards</SelectItem>
+                <SelectItem value="rss_feeds">RSS Feeds</SelectItem>
+                <SelectItem value="reports">Reports</SelectItem>
               </SelectContent>
             </Select>
 
