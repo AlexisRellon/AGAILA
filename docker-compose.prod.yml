@@ -34,8 +34,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 120s  # AI model loading takes time
+      retries: 5
+      start_period: 300s  # AI model download + loading can take 5+ min on first run
 
   # Frontend React PWA (Production Build with Nginx)
   frontend:
