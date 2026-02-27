@@ -20,7 +20,7 @@ services:
       - API_PORT=8000
       - API_HOST=0.0.0.0
       - ENV=production
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://*.up.railway.app}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://gaia-ph.vercel.app,https://gaia-production-2294.up.railway.app,https://agaila.me}
       - RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RSS_FEEDS=${RSS_FEEDS:-https://www.gmanetwork.com/news/rss/news/}
