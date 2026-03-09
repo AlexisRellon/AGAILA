@@ -26,7 +26,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
+  Label,
   ResponsiveContainer,
 } from 'recharts';
 
@@ -39,6 +39,37 @@ const HAZARD_COLORS: Record<string, string> = {
   fire: '#ef4444',
   storm_surge: '#3b82f6',
 };
+
+const REGION_COLORS = {
+  active: '#f59e0b',
+  resolved: '#22c55e',
+};
+
+function formatHazardType(raw: string | number): string {
+  const str = String(raw);
+  return str
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function renderColorLegend(
+  entries: { label: string; color: string }[],
+) {
+  return (
+    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-2 text-xs text-muted-foreground">
+      {entries.map((e) => (
+        <span key={e.label} className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+            style={{ backgroundColor: e.color }}
+          />
+          {e.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // Type definitions
 interface TrendData {
@@ -85,11 +116,6 @@ function isPieChartLabelEntry(entry: unknown): entry is PieChartLabelEntry {
   );
 }
 
-interface RegionData {
-  region: string;
-  count: number;
-}
-
 interface RegionStatsAPI {
   region: string;
   total_count: number;
@@ -118,40 +144,55 @@ export const OptimizedTrendsChart = memo<OptimizedTrendsChartProps>(
       ...trend,
     }));
 
+    const legendEntries = hazardTypes.map((h) => ({
+      label: formatHazardType(h.hazard_type),
+      color: h.color,
+    }));
+
     return (
-      <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis
-            dataKey="date"
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <YAxis
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-            }}
-          />
-          <Legend />
-          {hazardTypes.map((item) => (
-            <Area
-              key={item.hazard_type}
-              type="monotone"
-              dataKey={item.hazard_type}
-              stackId="1"
-              stroke={item.color}
-              fill={item.color}
-              fillOpacity={0.6}
+      <div>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey="date"
+              className="text-xs"
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
             />
-          ))}
-        </AreaChart>
-      </ResponsiveContainer>
+            <YAxis
+              className="text-xs"
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+            >
+              <Label
+                value="No. of Reports"
+                angle={-90}
+                position="insideLeft"
+                style={{ textAnchor: 'middle', fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              />
+            </YAxis>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '8px',
+              }}
+              formatter={(value: number, name: string) => [value, formatHazardType(name)]}
+            />
+            {hazardTypes.map((item) => (
+              <Area
+                key={item.hazard_type}
+                type="monotone"
+                dataKey={item.hazard_type}
+                stackId="1"
+                stroke={item.color}
+                fill={item.color}
+                fillOpacity={0.6}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+        {legendEntries.length > 0 && renderColorLegend(legendEntries)}
+      </div>
     );
   },
   (prevProps, nextProps) => {
@@ -175,43 +216,54 @@ interface OptimizedPieChartProps {
 
 export const OptimizedPieChart = memo<OptimizedPieChartProps>(
   ({ data }) => {
-    // Transform data to include index signature
     const chartData = data.map((item) => ({ ...item }));
 
+    const legendEntries = data.map((item) => ({
+      label: formatHazardType(item.hazard_type),
+      color: HAZARD_COLORS[item.hazard_type] || '#6b7280',
+    }));
+
     return (
-      <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={(entry) => {
-              if (!isPieChartLabelEntry(entry)) {
-                return '';
-              }
-              return `${entry.hazard_type}: ${(entry.percent * 100).toFixed(0)}%`;
-            }}
-            outerRadius={80}
-            fill="#8884d8"
-            dataKey="count"
-          >
-            {data.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={HAZARD_COLORS[entry.hazard_type] || '#6b7280'}
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-            }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      <div>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={(entry) => {
+                if (!isPieChartLabelEntry(entry)) {
+                  return '';
+                }
+                return `${(entry.percent * 100).toFixed(0)}%`;
+              }}
+              outerRadius={80}
+              fill="#8884d8"
+              dataKey="count"
+            >
+              {data.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={HAZARD_COLORS[entry.hazard_type] || '#6b7280'}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '8px',
+              }}
+              formatter={(value: number, _name: string, props: { payload?: { hazard_type?: string } }) => [
+                value,
+                formatHazardType(props.payload?.hazard_type ?? _name),
+              ]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        {legendEntries.length > 0 && renderColorLegend(legendEntries)}
+      </div>
     );
   },
   (prevProps, nextProps) => {
@@ -232,32 +284,56 @@ interface OptimizedDistributionBarChartProps {
 
 export const OptimizedDistributionBarChart = memo<OptimizedDistributionBarChartProps>(
   ({ data }) => {
-    // Transform data to include index signature
     const chartData = data.map((item) => ({ ...item }));
 
+    const legendEntries = data.map((item) => ({
+      label: formatHazardType(item.hazard_type),
+      color: HAZARD_COLORS[item.hazard_type] || '#6b7280',
+    }));
+
     return (
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis
-            dataKey="hazard_type"
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <YAxis
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-            }}
-          />
-          <Bar dataKey="count" fill="#3b82f6" />
-        </BarChart>
-      </ResponsiveContainer>
+      <div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey="hazard_type"
+              className="text-xs"
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+              tickFormatter={formatHazardType}
+            />
+            <YAxis
+              className="text-xs"
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+            >
+              <Label
+                value="No. of Reports"
+                angle={-90}
+                position="insideLeft"
+                style={{ textAnchor: 'middle', fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              />
+            </YAxis>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '8px',
+              }}
+              formatter={(value: number) => [value, 'Count']}
+              labelFormatter={formatHazardType}
+            />
+            <Bar dataKey="count">
+              {data.map((entry, index) => (
+                <Cell
+                  key={`bar-${index}`}
+                  fill={HAZARD_COLORS[entry.hazard_type] || '#6b7280'}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        {legendEntries.length > 0 && renderColorLegend(legendEntries)}
+      </div>
     );
   },
   (prevProps, nextProps) => {
@@ -277,37 +353,48 @@ interface OptimizedRegionChartProps {
 
 export const OptimizedRegionChart = memo<OptimizedRegionChartProps>(
   ({ data }) => {
-    // Transform RegionStatsAPI to RegionData for the chart
-    const chartData: RegionData[] = data.map((stat) => ({
-      region: stat.region,
-      count: stat.total_count,
-    }));
+    const regionLegend = [
+      { label: 'Active', color: REGION_COLORS.active },
+      { label: 'Resolved', color: REGION_COLORS.resolved },
+    ];
 
     return (
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={chartData} layout="vertical">
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis
-            type="number"
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <YAxis
-            dataKey="region"
-            type="category"
-            className="text-xs"
-            tick={{ fill: 'hsl(var(--muted-foreground))' }}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '8px',
-            }}
-          />
-          <Bar dataKey="count" fill="#22c55e" />
-        </BarChart>
-      </ResponsiveContainer>
+      <div>
+        <ResponsiveContainer width="100%" height={Math.max(300, data.length * 40)}>
+          <BarChart data={data} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              type="number"
+              className="text-xs"
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+            >
+              <Label
+                value="No. of Reports"
+                position="insideBottom"
+                offset={-2}
+                style={{ textAnchor: 'middle', fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              />
+            </XAxis>
+            <YAxis
+              dataKey="region"
+              type="category"
+              className="text-xs"
+              width={120}
+              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '8px',
+              }}
+            />
+            <Bar dataKey="active_count" name="Active" stackId="region" fill={REGION_COLORS.active} />
+            <Bar dataKey="resolved_count" name="Resolved" stackId="region" fill={REGION_COLORS.resolved} />
+          </BarChart>
+        </ResponsiveContainer>
+        {renderColorLegend(regionLegend)}
+      </div>
     );
   },
   (prevProps, nextProps) => {

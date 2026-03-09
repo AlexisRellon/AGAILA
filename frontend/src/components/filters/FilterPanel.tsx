@@ -97,15 +97,15 @@ export function FilterPanel({
   }, {} as Record<string, number>);
 
   const sourceCounts = hazards.reduce((acc: Record<SourceType, number>, hazard) => {
-    // Map source to source type
     let sourceType: SourceType = 'rss_feed';
-    
-    if (['gma_news', 'abs_cbn', 'inquirer', 'rappler', 'philstar'].includes(hazard.source_type.toLowerCase())) {
+    const src = (hazard.source_type || '').toLowerCase();
+
+    if (['gma_news', 'abs_cbn', 'inquirer', 'rappler', 'philstar'].includes(src)) {
       sourceType = 'rss_feed';
-    } else if (hazard.source_type.toLowerCase().includes('citizen')) {
+    } else if (src.includes('citizen')) {
       sourceType = hazard.validated ? 'citizen_verified' : 'citizen_unverified';
     }
-    
+
     acc[sourceType] = (acc[sourceType] || 0) + 1;
     return acc;
   }, {} as Record<SourceType, number>);

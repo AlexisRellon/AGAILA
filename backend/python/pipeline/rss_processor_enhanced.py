@@ -709,7 +709,7 @@ class RSSProcessorEnhanced:
                 'latitude': lat,
                 'longitude': lng,
                 'location_name': primary_location.get('location_name', ''),
-                'admin_division': primary_location.get('province', '') or primary_location.get('city', ''),
+                'admin_division': primary_location.get('region', '') or primary_location.get('province', '') or primary_location.get('city', ''),
                 'confidence_score': confidence_score,
                 'model_version': classifier.get_active_model(),
                 'source_type': 'rss',

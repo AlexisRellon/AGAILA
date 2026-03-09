@@ -452,8 +452,8 @@ export function RSSArticlesManager() {
   const updateMutation = useUpdateRSSArticle();
   const validateMutation = useValidateRSSArticle();
 
-  const articles = data?.articles || [];
-  const totalCount = data?.total || 0;
+  const articles = useMemo(() => data?.articles ?? [], [data?.articles]);
+  const totalCount = data?.total ?? 0;
 
   // Dialog states
   const [deletingArticle, setDeletingArticle] = useState<RSSArticle | null>(null);
