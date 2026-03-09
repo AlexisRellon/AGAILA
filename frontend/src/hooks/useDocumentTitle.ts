@@ -14,7 +14,7 @@ const routeTitles: Record<string, string> = {
   '/track': 'Track Report | AGAILA',
   '/dashboard': 'Dashboard | AGAILA',
   '/admin': 'Admin Dashboard | AGAILA',
-  '/reset-password': 'Reset Password | AGAILA',
+  '/reset-password': 'Forgot Password | AGAILA',
   '/update-password': 'Update Password | AGAILA',
   '/status': 'System Status | AGAILA',
 };

@@ -25,6 +25,10 @@ import {
   UserX,
   Edit,
   RefreshCw,
+  KeyRound,
+  Eye,
+  EyeOff,
+  UserCheck,
 } from 'lucide-react';
 import {
   ColumnDef,
@@ -87,6 +91,7 @@ import {
   FormMessage,
 } from '../ui/form';
 import { Alert, AlertDescription } from '../ui/alert';
+import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 
 import { useAuth, UserRole, UserStatus } from '../../contexts/AuthContext';
@@ -141,7 +146,18 @@ const UserManagement: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [updateRoleDialogOpen, setUpdateRoleDialogOpen] = useState(false);
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState('');
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [reactivateDialogOpen, setReactivateDialogOpen] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -263,16 +279,73 @@ const UserManagement: React.FC = () => {
   // Deactivate user
   const onDeactivateUser = async () => {
     if (!selectedUser) return;
+    if (!deactivateReason.trim()) return;
 
+    setDeactivateLoading(true);
     try {
-      await adminApi.users.deactivate(selectedUser.id);
+      await adminApi.users.deactivate(selectedUser.id, deactivateReason.trim());
       toast.success('User deactivated successfully');
       setDeactivateDialogOpen(false);
+      setDeactivateReason('');
       setSelectedUser(null);
-      // Realtime subscription will automatically trigger refetch
     } catch (error) {
       console.error('Error deactivating user:', error);
       toast.error(`Failed to deactivate user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setDeactivateLoading(false);
+    }
+  };
+
+  // Reactivate user
+  const onReactivateUser = async () => {
+    if (!selectedUser) return;
+
+    setReactivateLoading(true);
+    try {
+      await adminApi.users.reactivate(selectedUser.id);
+      toast.success(`User ${selectedUser.email} reactivated successfully`);
+      setReactivateDialogOpen(false);
+      setSelectedUser(null);
+    } catch (error) {
+      console.error('Error reactivating user:', error);
+      toast.error(`Failed to reactivate user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setReactivateLoading(false);
+    }
+  };
+
+  // Reset password
+  const onResetPassword = async () => {
+    if (!selectedUser) return;
+
+    setResetPasswordError(null);
+
+    if (resetPassword.length < 8) {
+      setResetPasswordError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (resetPassword !== resetPasswordConfirm) {
+      setResetPasswordError('Passwords do not match');
+      return;
+    }
+
+    setResetPasswordLoading(true);
+    try {
+      await adminApi.users.resetPassword(selectedUser.id, resetPassword);
+      toast.success(`Password reset successfully for ${selectedUser.email}`);
+      setResetPasswordDialogOpen(false);
+      setResetPassword('');
+      setResetPasswordConfirm('');
+      setResetPasswordError(null);
+      setSelectedUser(null);
+      setShowResetPassword(false);
+      setShowResetPasswordConfirm(false);
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setResetPasswordError(error instanceof Error ? error.message : 'Failed to reset password');
+    } finally {
+      setResetPasswordLoading(false);
     }
   };
 
@@ -379,6 +452,20 @@ const UserManagement: React.FC = () => {
                     <Edit className="mr-2 h-4 w-4" />
                     Update Role
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setResetPassword('');
+                      setResetPasswordConfirm('');
+                      setResetPasswordError(null);
+                      setShowResetPassword(false);
+                      setShowResetPasswordConfirm(false);
+                      setResetPasswordDialogOpen(true);
+                    }}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Reset Password
+                  </DropdownMenuItem>
                   {user.status === 'active' && (
                     <DropdownMenuItem
                       onClick={() => {
@@ -389,6 +476,18 @@ const UserManagement: React.FC = () => {
                     >
                       <UserX className="mr-2 h-4 w-4" />
                       Deactivate
+                    </DropdownMenuItem>
+                  )}
+                  {(user.status === 'inactive' || user.status === 'suspended') && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setReactivateDialogOpen(true);
+                      }}
+                      className="text-green-600"
+                    >
+                      <UserCheck className="mr-2 h-4 w-4" />
+                      Activate
                     </DropdownMenuItem>
                   )}
                 </>
@@ -743,7 +842,12 @@ const UserManagement: React.FC = () => {
         </Dialog>
 
         {/* Deactivate User Dialog */}
-        <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <Dialog open={deactivateDialogOpen} onOpenChange={(open) => {
+          setDeactivateDialogOpen(open);
+          if (!open) {
+            setDeactivateReason('');
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Deactivate User</DialogTitle>
@@ -751,18 +855,168 @@ const UserManagement: React.FC = () => {
                 Are you sure you want to deactivate {selectedUser?.email}?
               </DialogDescription>
             </DialogHeader>
+            <div className="space-y-4">
+              <Alert>
+                <UserX className="h-4 w-4" />
+                <AlertDescription>
+                  This will prevent the user from logging in. This action can be reversed by reactivating the user.
+                </AlertDescription>
+              </Alert>
+              <div className="space-y-2">
+                <label htmlFor="deactivate-reason" className="text-sm font-medium">
+                  Reason for deactivation <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  id="deactivate-reason"
+                  value={deactivateReason}
+                  onChange={(e) => setDeactivateReason(e.target.value)}
+                  placeholder="Provide a reason for deactivating this user..."
+                  rows={3}
+                  disabled={deactivateLoading}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This reason will be recorded in the audit trail.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeactivateDialogOpen(false)} disabled={deactivateLoading}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={onDeactivateUser}
+                disabled={deactivateLoading || !deactivateReason.trim()}
+              >
+                {deactivateLoading ? 'Deactivating...' : 'Deactivate User'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reactivate User Dialog */}
+        <Dialog open={reactivateDialogOpen} onOpenChange={setReactivateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Activate User</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to reactivate {selectedUser?.email}?
+              </DialogDescription>
+            </DialogHeader>
             <Alert>
-              <UserX className="h-4 w-4" />
+              <UserCheck className="h-4 w-4" />
               <AlertDescription>
-                This will prevent the user from logging in. This action can be reversed by reactivating the user.
+                This will restore the user&apos;s ability to log in. This action will be recorded in the audit trail.
               </AlertDescription>
             </Alert>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDeactivateDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setReactivateDialogOpen(false)} disabled={reactivateLoading}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={onDeactivateUser}>
-                Deactivate User
+              <Button onClick={onReactivateUser} disabled={reactivateLoading}>
+                {reactivateLoading ? 'Activating...' : 'Activate User'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={resetPasswordDialogOpen} onOpenChange={(open) => {
+          setResetPasswordDialogOpen(open);
+          if (!open) {
+            setResetPassword('');
+            setResetPasswordConfirm('');
+            setResetPasswordError(null);
+            setShowResetPassword(false);
+            setShowResetPasswordConfirm(false);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset User Password</DialogTitle>
+              <DialogDescription>
+                Set a new password for {selectedUser?.email}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {resetPasswordError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{resetPasswordError}</AlertDescription>
+                </Alert>
+              )}
+              <div className="space-y-2">
+                <label htmlFor="admin-new-password" className="text-sm font-medium">
+                  New Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="admin-new-password"
+                    type={showResetPassword ? 'text' : 'password'}
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder="Enter new password (min. 8 characters)"
+                    disabled={resetPasswordLoading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="admin-confirm-password" className="text-sm font-medium">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="admin-confirm-password"
+                    type={showResetPasswordConfirm ? 'text' : 'password'}
+                    value={resetPasswordConfirm}
+                    onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                    placeholder="Confirm new password"
+                    disabled={resetPasswordLoading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPasswordConfirm(!showResetPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    aria-label={showResetPasswordConfirm ? 'Hide password' : 'Show password'}
+                  >
+                    {showResetPasswordConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 p-3 rounded-md">
+                <p className="font-medium">Password requirements:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li className={resetPassword.length >= 8 ? 'text-green-600' : ''}>
+                    At least 8 characters long
+                  </li>
+                  <li className={resetPassword && resetPasswordConfirm && resetPassword === resetPasswordConfirm ? 'text-green-600' : ''}>
+                    Both passwords must match
+                  </li>
+                </ul>
+              </div>
+              <Alert>
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  This action will be logged in the audit trail. The user will need to use this new password to log in.
+                </AlertDescription>
+              </Alert>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)} disabled={resetPasswordLoading}>
+                Cancel
+              </Button>
+              <Button onClick={onResetPassword} disabled={resetPasswordLoading}>
+                {resetPasswordLoading ? 'Resetting...' : 'Reset Password'}
               </Button>
             </DialogFooter>
           </DialogContent>

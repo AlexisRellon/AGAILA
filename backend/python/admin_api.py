@@ -130,6 +130,22 @@ class DeactivateUserRequest(BaseModel):
     status: str = Field("success", description="Status of the deactivation operation")
 
 
+class ReactivateUserRequest(BaseModel):
+    """Request body for reactivating a user"""
+    event_type: Optional[str] = Field(None, description="Type of event for logging purposes")
+    severity: str = Field("INFO", description="Severity level of the event")
+    reason: Optional[str] = Field(None, max_length=500, description="Reason for reactivation")
+    status: str = Field("success", description="Status of the reactivation operation")
+
+
+class ResetUserPasswordRequest(BaseModel):
+    """Request body for admin-initiated password reset"""
+    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+    event_type: Optional[str] = Field(None, description="Type of event for logging purposes")
+    severity: str = Field("WARNING", description="Severity level of the event")
+    status: str = Field("success", description="Status of the password reset operation")
+
+
 class AuditLogResponse(BaseModel):
     """Audit log entry for admin dashboard - matches gaia.audit_logs schema"""
     id: str
@@ -449,6 +465,119 @@ async def deactivate_user(
     except Exception as e:
         logger.error(f"Error deactivating user: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to deactivate user")
+
+
+@router.patch("/users/{user_id}/reactivate", response_model=UserProfileResponse)
+async def reactivate_user(
+    user_id: str,
+    reactivate_request: ReactivateUserRequest,
+    request: Request,
+    current_user: UserContext = Depends(require_master_admin)
+):
+    """
+    Reactivate a deactivated user account.
+    
+    **Permissions**: Master Admin only
+    **Module**: UM-03 (User Profile Management)
+    """
+    try:
+        user_response = supabase.schema("gaia").from_("user_profiles").select("*").eq("id", user_id).execute()
+        
+        if not user_response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_profile = user_response.data[0]
+        
+        if current_profile["status"] == UserStatus.ACTIVE.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already active"
+            )
+        
+        update_data = {
+            "status": UserStatus.ACTIVE.value,
+            "deactivated_at": None,
+            "deactivated_by": None
+        }
+        
+        updated_response = supabase.schema("gaia").from_("user_profiles").update(update_data).eq("id", user_id).execute()
+        
+        await log_admin_action(
+            user=current_user,
+            action="user_reactivated",
+            action_description=f"Reactivated user account for {current_profile['email']}. Reason: {reactivate_request.reason or 'Not provided'}",
+            resource_type="user_profiles",
+            resource_id=user_id,
+            old_values={"status": current_profile["status"]},
+            new_values={"status": UserStatus.ACTIVE.value},
+            request=request,
+            event_type="USER_REACTIVATED"
+        )
+        
+        logger.info(f"Master Admin {current_user.email} reactivated user: {current_profile['email']}")
+        
+        return updated_response.data[0]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reactivating user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to reactivate user")
+
+
+@router.patch("/users/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: str,
+    password_reset: ResetUserPasswordRequest,
+    request: Request,
+    current_user: UserContext = Depends(require_master_admin)
+):
+    """
+    Reset a user's password (admin-initiated).
+    
+    **Permissions**: Master Admin only
+    **Module**: UM-03 (User Profile Management)
+    """
+    try:
+        user_response = supabase.schema("gaia").from_("user_profiles").select("*").eq("id", user_id).execute()
+        
+        if not user_response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        target_user = user_response.data[0]
+
+        if user_id == current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Use the profile settings to change your own password."
+            )
+
+        supabase.auth.admin.update_user_by_id(
+            user_id,
+            {"password": password_reset.new_password}
+        )
+
+        await log_admin_action(
+            user=current_user,
+            action="password_reset",
+            action_description=f"Reset password for {target_user['email']}",
+            resource_type="user_profiles",
+            resource_id=user_id,
+            old_values={},
+            new_values={"password_reset": True},
+            request=request,
+            event_type="PASSWORD_RESET"
+        )
+        
+        logger.info(f"Master Admin {current_user.email} reset password for user: {target_user['email']}")
+        
+        return {"message": f"Password reset successfully for {target_user['email']}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting password for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
 
 
 # ============================================================================

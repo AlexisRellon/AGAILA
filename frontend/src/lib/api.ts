@@ -90,6 +90,16 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     }),
+
+    reactivate: (userId: string, reason?: string) => apiRequest(`/api/v1/admin/users/${userId}/reactivate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+
+    resetPassword: (userId: string, newPassword: string) => apiRequest(`/api/v1/admin/users/${userId}/reset-password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
   },
 
   // Audit Logs
