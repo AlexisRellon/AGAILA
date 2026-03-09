@@ -216,16 +216,84 @@ async def get_region_stats():
     cache_key = generate_cache_key("analytics:regions")
     
     async def fetch_regions():
+        from backend.python.philippine_regions import (
+            get_region_from_location,
+            PROVINCE_TO_REGION,
+            PHILIPPINE_ADMIN_MAPPING,
+        )
+
         response = supabase.schema('gaia').from_('hazards') \
-            .select('admin_division,status') \
+            .select('admin_division,location_name,status') \
             .execute()
         
         if not response.data:
             return []
         
-        region_data = {}
+        known_regions = {v['region'] for v in PROVINCE_TO_REGION.values()}
+        known_regions.update({'NCR', 'CAR', 'BARMM'})
+
+        city_lookup = {k.lower(): v for k, v in PHILIPPINE_ADMIN_MAPPING.items()}
+        province_lookup = {k.lower(): v for k, v in PROVINCE_TO_REGION.items()}
+
+        def _try_resolve(text: str) -> Optional[str]:
+            """Try to resolve a single text fragment to a region code."""
+            if not text:
+                return None
+            clean = text.strip()
+            if not clean or clean.lower() == 'philippines':
+                return None
+
+            if clean in known_regions:
+                return clean
+
+            result = get_region_from_location(city=clean)
+            if result:
+                return result['region']
+            result = get_region_from_location(province=clean)
+            if result:
+                return result['region']
+
+            words = clean.split()
+            if len(words) > 1:
+                without_suffix = ' '.join(words[:-1])
+                result = get_region_from_location(city=without_suffix)
+                if result:
+                    return result['region']
+
+            lower = clean.lower()
+            for city_key, data in city_lookup.items():
+                if city_key in lower or lower in city_key:
+                    return data['region']
+            for prov_key, data in province_lookup.items():
+                if prov_key in lower or lower in prov_key:
+                    return data['region']
+
+            return None
+
+        def resolve_region(admin_div: str, location_name: str) -> str:
+            """Resolve admin_division + location_name to a standardized region code."""
+            for candidate in [admin_div, location_name]:
+                if not candidate or not candidate.strip():
+                    continue
+
+                hit = _try_resolve(candidate)
+                if hit:
+                    return hit
+
+                parts = [p.strip() for p in candidate.split(',') if p.strip()]
+                for part in parts:
+                    hit = _try_resolve(part)
+                    if hit:
+                        return hit
+
+            return 'Unknown'
+
+        region_data: Dict[str, Dict] = {}
         for item in response.data:
-            region = item.get('admin_division') or 'Unknown'
+            raw_admin = item.get('admin_division') or ''
+            loc_name = item.get('location_name') or ''
+            region = resolve_region(raw_admin, loc_name)
+
             if region not in region_data:
                 region_data[region] = {
                     'region': region,

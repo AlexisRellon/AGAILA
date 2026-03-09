@@ -16,7 +16,7 @@
  * ```
  */
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 // ============================================================================
@@ -124,17 +124,16 @@ function getDateRange(timeWindow: TimeWindow, customRange?: CustomDateRange): { 
  * Map source to source type category
  */
 function mapSourceToType(source: string, validated: boolean): SourceType {
-  // RSS feeds from news sources
-  if (['gma_news', 'abs_cbn', 'inquirer', 'rappler', 'philstar'].includes(source.toLowerCase())) {
+  const src = (source || '').toLowerCase();
+
+  if (['gma_news', 'abs_cbn', 'inquirer', 'rappler', 'philstar'].includes(src)) {
     return 'rss_feed';
   }
-  
-  // Citizen reports
-  if (source.toLowerCase().includes('citizen')) {
+
+  if (src.includes('citizen')) {
     return validated ? 'citizen_verified' : 'citizen_unverified';
   }
-  
-  // Default to RSS feed
+
   return 'rss_feed';
 }
 
@@ -281,61 +280,72 @@ function clearFiltersFromStorage(): void {
 
 export function useHazardFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  // Derive filters directly from URL (single source of truth)
-  // Priority: URL params > localStorage > defaults
-  const filters = useMemo<FilterState>(() => {
+  const isInitializedRef = useRef(false);
+
+  // Initialize state from URL params or localStorage on first render
+  const [filters, setFilters] = useState<FilterState>(() => {
     const urlFilters = parseFiltersFromURL(searchParams);
-    
-    // Check if URL has any filters
     const hasUrlFilters = searchParams.toString().length > 0;
-    
+
     if (hasUrlFilters) {
-      // URL is the source of truth
-      return {
-        ...DEFAULT_FILTERS,
-        ...urlFilters,
-      };
+      return { ...DEFAULT_FILTERS, ...urlFilters };
     }
-    
-    // No URL filters, fall back to localStorage
+
     const storedFilters = loadFiltersFromStorage();
-    return {
-      ...DEFAULT_FILTERS,
-      ...storedFilters,
-    };
+    return { ...DEFAULT_FILTERS, ...storedFilters };
+  });
+
+  // Mark as initialized after first render
+  useEffect(() => {
+    isInitializedRef.current = true;
+  }, []);
+
+  // Sync URL → state when search params change externally (e.g. back/forward nav)
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+
+    const urlFilters = parseFiltersFromURL(searchParams);
+    const hasUrlFilters = searchParams.toString().length > 0;
+
+    if (hasUrlFilters) {
+      setFilters(prev => {
+        const next = { ...DEFAULT_FILTERS, ...urlFilters };
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
+    }
   }, [searchParams]);
 
-  // Persist filters to localStorage on change
+  // Sync state → URL and localStorage whenever filters change
   useEffect(() => {
+    if (!isInitializedRef.current) return;
+
     saveFiltersToStorage(filters);
+
+    const newParams = serializeFiltersToURL(filters);
+    const currentParamsStr = searchParams.toString();
+    const newParamsStr = newParams.toString();
+
+    if (currentParamsStr !== newParamsStr) {
+      setSearchParams(newParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   /**
    * Update filters (partial update)
-   * Updates URL directly, which will trigger filters to recompute
+   * Uses setState directly — no navigation cycle triggered synchronously
    */
   const updateFilters = useCallback((updates: Partial<FilterState>) => {
-    setSearchParams((prev) => {
-      // Merge current filters with updates
-      const currentFilters = parseFiltersFromURL(prev);
-      const newFilters: FilterState = { 
-        ...DEFAULT_FILTERS, 
-        ...currentFilters, 
-        ...updates 
-      };
-      return serializeFiltersToURL(newFilters);
-    }, { replace: true });
-  }, [setSearchParams]);
+    setFilters(prev => ({ ...prev, ...updates }));
+  }, []);
 
   /**
    * Reset filters to defaults
-   * Clears URL params and localStorage, then sets defaults in URL
    */
   const resetFilters = useCallback(() => {
-    // Clear localStorage
     clearFiltersFromStorage();
-    // Set URL to default filters (empty = all defaults)
+    setFilters({ ...DEFAULT_FILTERS });
     setSearchParams(new URLSearchParams(), { replace: true });
   }, [setSearchParams]);
 

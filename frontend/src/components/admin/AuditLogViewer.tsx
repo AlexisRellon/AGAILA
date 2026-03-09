@@ -11,7 +11,7 @@
  * Permissions: Master Admin, Validator (read-only)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -109,7 +109,7 @@ const AuditLogViewer: React.FC = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   // Fetch audit logs with React Query
-  const { data: logs = [], isLoading, error: queryError } = useQuery({
+  const { data: rawLogs, isLoading, error: queryError } = useQuery({
     queryKey: ['admin', 'auditLogs', { emailFilter, actionFilter, resourceTypeFilter, successFilter, dateRange }],
     queryFn: async () => {
       const params: Record<string, string | number | boolean> = {
@@ -131,6 +131,7 @@ const AuditLogViewer: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
+  const logs = useMemo(() => rawLogs ?? [], [rawLogs]);
   const error = queryError ? (queryError as Error).message : null;
 
   const columns = [

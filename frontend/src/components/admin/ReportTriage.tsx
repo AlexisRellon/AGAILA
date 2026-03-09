@@ -217,7 +217,7 @@ const ReportTriage: React.FC = () => {
 
   // Fetch reports with React Query
   const { 
-    data: reports = [], 
+    data: rawReports, 
     isLoading, 
     error: queryError, 
     refetch 
@@ -248,6 +248,7 @@ const ReportTriage: React.FC = () => {
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
+  const reports = useMemo(() => rawReports ?? [], [rawReports]);
   const error = queryError ? (queryError as Error).message : null;
 
   useEffect(() => {
