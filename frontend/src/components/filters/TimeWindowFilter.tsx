@@ -19,7 +19,7 @@ import React, { useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { DayPicker, DateRange } from 'react-day-picker';
-import 'react-day-picker/dist/style.css';
+import 'react-day-picker/style.css';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import type { TimeWindow, CustomDateRange } from '../../hooks/useHazardFilters';
@@ -130,20 +130,18 @@ export function TimeWindowFilter({
   };
 
   /**
-   * Handle custom date range selection
+   * Handle custom date range selection (v9 API: selected, triggerDate, modifiers, event)
    */
   const handleDateRangeSelect = (range: DateRange | undefined) => {
     setSelectedRange(range);
-    
+
     if (range?.from && range?.to) {
-      // Normalize dates to start and end of day
       const start = startOfDay(range.from);
       const end = endOfDay(range.to);
-      
-      // Validate range
+
       const error = validateDateRange(start, end);
       setValidationError(error);
-      
+
       if (!error) {
         onTimeWindowChange('custom', { start, end });
       }
@@ -237,77 +235,38 @@ export function TimeWindowFilter({
             <div 
               className="w-full bg-white rounded-lg border border-gray-200 p-3 overflow-hidden"
               style={{
-                // react-day-picker CSS custom properties for sizing
-                '--rdp-cell-size': '44px',
                 '--rdp-accent-color': '#3b82f6',
-                '--rdp-background-color': '#dbeafe',
+                '--rdp-accent-background-color': '#dbeafe',
+                '--rdp-day-height': '36px',
+                '--rdp-day-width': '36px',
+                '--rdp-day_button-height': '34px',
+                '--rdp-day_button-width': '34px',
+                '--rdp-range_start-date-background-color': '#3b82f6',
+                '--rdp-range_end-date-background-color': '#3b82f6',
+                '--rdp-range_middle-background-color': '#dbeafe',
+                '--rdp-range_middle-color': '#1e40af',
+                '--rdp-today-color': '#3b82f6',
               } as React.CSSProperties}
             >
               <style>{`
-                .compact-rdp .rdp-month { width: 100%; margin: 0; }
-                .compact-rdp .rdp-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
-                .compact-rdp .rdp-head_cell { padding: 8px 0; font-size: 12px; font-weight: 600; color: #6b7280; text-align: center; }
-                .compact-rdp .rdp-cell { padding: 2px; text-align: center; }
-                .compact-rdp .rdp-day { width: 100%; height: 36px; font-size: 14px; border-radius: 6px; transition: all 0.15s ease; }
-                .compact-rdp .rdp-caption_label { font-size: 15px; font-weight: 600; }
-                .compact-rdp .rdp-nav_button { width: 32px; height: 32px; }
-                .compact-rdp .rdp-nav_icon { width: 14px; height: 14px; }
-                /* Range start (from) - rounded left */
-                .compact-rdp .rdp-day_range_start { 
-                  background-color: #3b82f6 !important; 
-                  color: white !important; 
-                  border-radius: 9999px 0 0 9999px !important;
-                  font-weight: 600;
-                }
-                /* Range end (to) - rounded right */
-                .compact-rdp .rdp-day_range_end { 
-                  background-color: #3b82f6 !important; 
-                  color: white !important; 
-                  border-radius: 0 9999px 9999px 0 !important;
-                  font-weight: 600;
-                }
-                /* When start and end are the same day */
-                .compact-rdp .rdp-day_range_start.rdp-day_range_end {
-                  border-radius: 9999px !important;
-                }
-                /* Middle days in range */
-                .compact-rdp .rdp-day_range_middle {
-                  background-color: #dbeafe !important;
-                  color: #1e40af !important;
-                  border-radius: 0 !important;
-                }
-                /* Hover state for days */
-                .compact-rdp .rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_range_start):not(.rdp-day_range_end):not(.rdp-day_range_middle):not(.rdp-day_disabled) {
-                  background-color: #f3f4f6;
-                }
-                /* Today indicator */
-                .compact-rdp .rdp-day_today:not(.rdp-day_range_start):not(.rdp-day_range_end):not(.rdp-day_range_middle) {
-                  font-weight: 700;
-                  color: #3b82f6;
-                  border: 2px solid #3b82f6;
-                }
-                /* Disabled days */
-                .compact-rdp .rdp-day_disabled {
-                  color: #d1d5db !important;
-                  cursor: not-allowed;
-                }
+                .compact-rdp { width: 100%; }
+                .compact-rdp .rdp-months { width: 100%; }
+                .compact-rdp .rdp-month { width: 100%; }
+                .compact-rdp .rdp-month_grid { width: 100%; }
+                .compact-rdp .rdp-month_caption { font-size: 15px; font-weight: 600; }
+                .compact-rdp .rdp-weekday { padding: 8px 0; font-size: 12px; font-weight: 600; color: #6b7280; }
+                .compact-rdp .rdp-day button { font-size: 14px; transition: all 0.15s ease; }
+                .compact-rdp .rdp-disabled { opacity: 0.35; cursor: not-allowed; }
               `}</style>
               <DayPicker
                 mode="range"
                 selected={selectedRange}
                 onSelect={handleDateRangeSelect}
                 disabled={[
-                  { after: new Date() }, // Disable future dates
+                  { after: new Date() },
                 ]}
                 numberOfMonths={1}
                 defaultMonth={customDateRange?.start || subDays(new Date(), 30)}
-                modifiersClassNames={{
-                  range_start: 'rdp-day_range_start',
-                  range_end: 'rdp-day_range_end',
-                  range_middle: 'rdp-day_range_middle',
-                  today: 'rdp-day_today',
-                  disabled: 'rdp-day_disabled',
-                }}
                 className="compact-rdp"
                 showOutsideDays
               />

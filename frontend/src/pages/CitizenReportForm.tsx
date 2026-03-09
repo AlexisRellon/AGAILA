@@ -27,7 +27,7 @@ import { API_BASE_URL } from '../lib/api';
 import { isValidPhilippinePhoneNumber } from '../utils/phoneValidation';
 
 /** Must match backend SUBMISSION_COOLDOWN_SECONDS. Cooldown starts on successful submit. */
-const SUBMISSION_COOLDOWN_SECONDS = 180;
+const SUBMISSION_COOLDOWN_SECONDS = 300;
 const COOLDOWN_STORAGE_KEY = 'citizen_report_cooldown_until';
 
 // ============================================================================

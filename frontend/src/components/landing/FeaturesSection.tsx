@@ -35,7 +35,7 @@ export const FeaturesSection: React.FC = () => {
         id="features-heading"
         className="font-lato font-extrabold text-[28px] sm:text-[32px] md:text-[36px] leading-[1.2] text-[#334155] text-center"
       >
-        The Core Components of GAIA
+        The Core Components of AGAILA
       </h2>
       <ul className="box-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 items-start justify-center overflow-visible p-0 w-full list-none">
         {features.map((feature, index) => (

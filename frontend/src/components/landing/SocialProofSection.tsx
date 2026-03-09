@@ -8,7 +8,7 @@ export const SocialProofSection: React.FC = () => {
           A Tool Built for Responders
         </h2>
         <p className="flex flex-col font-lato justify-center max-w-[760px] text-[14px] sm:text-[16px] leading-[24px]">
-          GAIA is designed to meet the critical needs of Local Government Units (LGUs) and Disaster Risk Reduction and Management Offices (DRRMOs) across the Philippines.
+          AGAILA is designed to meet the critical needs of Local Government Units (LGUs) and Disaster Risk Reduction and Management Offices (DRRMOs) across the Philippines.
         </p>
       </div>
     </div>

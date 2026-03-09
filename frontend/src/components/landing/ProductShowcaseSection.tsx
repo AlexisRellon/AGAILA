@@ -35,7 +35,7 @@ export const ProductShowcaseSection: React.FC = () => {
           id="showcase-heading"
           className="font-lato font-extrabold text-[28px] sm:text-[32px] md:text-[36px] leading-[1.2] text-[#334155]"
         >
-          GAIA&apos;s AI-Generated Assessments
+          AGAILA&apos;s AI-Generated Assessments
         </h2>
         <p className="font-lato max-w-[720px] text-[14px] sm:text-[16px] leading-[24px] text-black">
           Explore the real-time outputs from our AI pipeline, turning unstructured reports into live intelligence.

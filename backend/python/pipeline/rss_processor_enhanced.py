@@ -19,7 +19,7 @@ import asyncio
 from typing import Dict, List, Optional, Tuple
 import os
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode
 
 # Import AI models
 from backend.python.models.classifier import classifier
@@ -230,11 +230,24 @@ class RSSProcessorEnhanced:
                         
                         # Only save if locations were found
                         if locations:
+                            # Map classifier type to DB type for dedup
+                            _type_map = {
+                                'flooding': 'flood', 'fire': 'fire',
+                                'earthquake': 'earthquake', 'typhoon': 'typhoon',
+                                'landslide': 'landslide', 'volcanic eruption': 'volcanic_eruption',
+                                'drought': 'drought', 'tsunami': 'tsunami',
+                                'storm surge': 'storm_surge', 'tornado': 'tornado',
+                            }
+                            db_hazard_type = _type_map.get(
+                                (classification.get('hazard_type') or '').lower(), 'other'
+                            )
+
                             # Check for duplicates before saving
                             is_duplicate, duplicate_id = await self._check_duplicate(
                                 entry.get('link', ''),
                                 content_data,
-                                locations[0] if locations else None
+                                locations[0] if locations else None,
+                                hazard_type=db_hazard_type
                             )
                             
                             if is_duplicate:
@@ -430,40 +443,111 @@ class RSSProcessorEnhanced:
             logger.error(f"URL validation error: {str(e)}")
             return False
     
+    def _normalize_url(self, url: str) -> str:
+        """
+        Normalize URL for deduplication by stripping tracking parameters
+        so the same article with different UTM tags is caught as a duplicate.
+        """
+        if not url:
+            return ''
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            tracking_params = {
+                'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                'fbclid', 'gclid', 'ref', 'source', 'mc_cid', 'mc_eid',
+            }
+            filtered_params = {k: v for k, v in params.items() if k.lower() not in tracking_params}
+            clean_query = urlencode(filtered_params, doseq=True)
+            clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            if clean_query:
+                clean_url += f"?{clean_query}"
+            return clean_url.rstrip('/')
+        except Exception:
+            return url
+
+    def _normalize_title_for_dedup(self, title: str) -> str:
+        """
+        Aggressively normalize title for fuzzy deduplication.
+        Strips common prefixes, punctuation, and extra whitespace.
+        """
+        if not title:
+            return ''
+        normalized = ' '.join(title.lower().split())
+        normalized = re.sub(
+            r'^(?:breaking|look|just\s+in|update|updated|watch|read|live|alert)\s*:\s*',
+            '', normalized
+        )
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+        normalized = ' '.join(normalized.split())
+        return normalized
+
+    def _titles_are_similar(self, title1: str, title2: str, threshold: float = 0.65) -> bool:
+        """
+        Check if two titles are similar enough to be duplicates using
+        Jaccard word-overlap similarity.
+        """
+        if not title1 or not title2:
+            return False
+        words1 = set(self._normalize_title_for_dedup(title1).split())
+        words2 = set(self._normalize_title_for_dedup(title2).split())
+        if len(words1) < 3 or len(words2) < 3:
+            return False
+        intersection = words1 & words2
+        union = words1 | words2
+        similarity = len(intersection) / len(union) if union else 0
+        return similarity >= threshold
+
     async def _check_duplicate(
         self,
         url: str,
         content_data: Dict,
-        location: Optional[Dict]
+        location: Optional[Dict],
+        hazard_type: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
         """
         Check if hazard already exists in database using multiple strategies.
         
         Strategies:
-        1. Exact URL match (fastest, most reliable)
-        2. Article title match within time window
+        1. Exact URL match + normalized URL match (fastest, most reliable)
+        2. Exact article title match within time window
         3. Content hash match within time window
-        4. Geographic + temporal proximity (5km radius, time window)
+        4. Fuzzy title similarity match within time window
+        5. Geographic + temporal proximity (5km radius, same hazard type)
         
         Args:
             url: Article URL
             content_data: Extracted content
             location: Primary location from Geo-NER
+            hazard_type: Classified hazard type (for geographic proximity filtering)
             
         Returns:
             tuple: (is_duplicate: bool, duplicate_id: str | None)
         """
         try:
-            # Strategy 1: Check URL (fastest)
+            time_threshold = datetime.utcnow() - timedelta(hours=self.duplicate_time_window)
+
+            # Strategy 1: Check exact URL (fastest)
             if url:
                 response = supabase.schema('gaia').from_('hazards').select('id').eq('source_url', url).limit(1).execute()
                 if response.data:
                     return True, response.data[0]['id']
+
+                # Strategy 1b: Check normalized URL (strips tracking params)
+                normalized_url = self._normalize_url(url)
+                if normalized_url and normalized_url != url:
+                    response = supabase.schema('gaia').from_('hazards').select('id, source_url') \
+                        .gte('detected_at', time_threshold.isoformat()) \
+                        .eq('source_type', 'rss') \
+                        .limit(500) \
+                        .execute()
+                    if response.data:
+                        for row in response.data:
+                            if self._normalize_url(row.get('source_url', '')) == normalized_url:
+                                return True, row['id']
             
-            # Strategy 2: Check article title within time window
+            # Strategy 2: Check exact article title within time window
             if content_data.get('title'):
-                time_threshold = datetime.utcnow() - timedelta(hours=self.duplicate_time_window)
-                # Normalize title: lowercase, remove extra whitespace
                 normalized_title = ' '.join(content_data['title'].lower().split())
                 
                 response = supabase.schema('gaia').from_('hazards') \
@@ -478,7 +562,6 @@ class RSSProcessorEnhanced:
             
             # Strategy 3: Check content hash within time window
             content_hash = self._generate_content_hash(content_data)
-            time_threshold = datetime.utcnow() - timedelta(hours=self.duplicate_time_window)
             
             response = supabase.schema('gaia').from_('hazards') \
                 .select('id') \
@@ -489,29 +572,48 @@ class RSSProcessorEnhanced:
             
             if response.data:
                 return True, response.data[0]['id']
-            
-            # Strategy 4: Location + time window (within 5km radius)
-            if location and location.get('latitude') and location.get('longitude'):
-                # Use PostGIS function to find nearby hazards
-                response = supabase.schema('gaia').rpc(
-                    'get_nearby_hazards',
-                    {
-                        'ref_lat': location['latitude'],
-                        'ref_lng': location['longitude'],
-                        'radius_km': 5.0,
-                        'time_window_hours': self.duplicate_time_window
-                    }
-                ).execute()
-                
+
+            # Strategy 4: Fuzzy title similarity within time window
+            if content_data.get('title') and len(content_data['title']) > 15:
+                response = supabase.schema('gaia').from_('hazards') \
+                    .select('id, source_title') \
+                    .gte('detected_at', time_threshold.isoformat()) \
+                    .eq('source_type', 'rss') \
+                    .limit(300) \
+                    .execute()
+
                 if response.data:
-                    # Found nearby hazards, likely duplicate
-                    return True, response.data[0]['hazard_id']
+                    for row in response.data:
+                        existing_title = row.get('source_title', '')
+                        if existing_title and self._titles_are_similar(content_data['title'], existing_title):
+                            logger.info(f"Fuzzy title match: '{content_data['title'][:60]}' ~ '{existing_title[:60]}'")
+                            return True, row['id']
+            
+            # Strategy 5: Location + time window + same hazard type (within 5km radius)
+            if location and location.get('latitude') and location.get('longitude'):
+                try:
+                    response = supabase.schema('gaia').rpc(
+                        'get_nearby_hazards',
+                        {
+                            'ref_lat': location['latitude'],
+                            'ref_lng': location['longitude'],
+                            'radius_km': 5.0,
+                            'time_window_hours': self.duplicate_time_window
+                        }
+                    ).execute()
+                    
+                    if response.data:
+                        for nearby in response.data:
+                            nearby_type = nearby.get('hazard_type', '')
+                            if hazard_type and nearby_type == hazard_type:
+                                return True, nearby.get('hazard_id') or nearby.get('id')
+                except Exception as rpc_err:
+                    logger.warning(f"Geographic dedup RPC failed: {rpc_err}")
             
             return False, None
             
         except Exception as e:
             logger.error(f"Duplicate check error: {str(e)}", exc_info=True)
-            # On error, assume not duplicate (conservative approach - avoid false positives)
             return False, None
     
     async def _save_hazard_to_db(
@@ -607,7 +709,7 @@ class RSSProcessorEnhanced:
                 'latitude': lat,
                 'longitude': lng,
                 'location_name': primary_location.get('location_name', ''),
-                'admin_division': primary_location.get('province', '') or primary_location.get('city', ''),
+                'admin_division': primary_location.get('region', '') or primary_location.get('province', '') or primary_location.get('city', ''),
                 'confidence_score': confidence_score,
                 'model_version': classifier.get_active_model(),
                 'source_type': 'rss',

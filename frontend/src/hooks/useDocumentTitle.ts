@@ -6,17 +6,17 @@ import { useLocation } from 'react-router-dom';
  * Screen readers announce page title changes to users.
  */
 const routeTitles: Record<string, string> = {
-  '/': 'Home | GAIA - Geospatial AI-driven Assessment',
-  '/map': 'Hazard Map | GAIA',
-  '/login': 'Login | GAIA',
-  '/register': 'Register | GAIA',
-  '/report': 'Submit Report | GAIA',
-  '/track': 'Track Report | GAIA',
-  '/dashboard': 'Dashboard | GAIA',
-  '/admin': 'Admin Dashboard | GAIA',
-  '/reset-password': 'Reset Password | GAIA',
-  '/update-password': 'Update Password | GAIA',
-  '/status': 'System Status | GAIA',
+  '/': 'Home | AGAILA ',
+  '/map': 'Hazard Map | AGAILA',
+  '/login': 'Login | AGAILA',
+  '/register': 'Register | AGAILA',
+  '/report': 'Submit Report | AGAILA',
+  '/track': 'Track Report | AGAILA',
+  '/dashboard': 'Dashboard | AGAILA',
+  '/admin': 'Admin Dashboard | AGAILA',
+  '/reset-password': 'Forgot Password | AGAILA',
+  '/update-password': 'Update Password | AGAILA',
+  '/status': 'System Status | AGAILA',
 };
 
 /**

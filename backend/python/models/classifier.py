@@ -148,6 +148,61 @@ class ClimateNLIClassifier:
     ]
 
     # =========================================================================
+    # MAN-MADE / URBAN FIRE EXCLUSION PATTERNS
+    # Fire reports that are NOT wildfires: residential, building, industrial,
+    # arson, BFP operational reports, electrical fires, etc.
+    # =========================================================================
+
+    MAN_MADE_FIRE_PATTERNS = [
+        # Residential/Building fires
+        r'\b(?:house|home|apartment|condo|residential|building|warehouse|factory|market|mall|store|shop|office|hotel|hospital|school|church|dormitor(?:y|ies))\s+(?:fire|on\s+fire|caught\s+fire)\b',
+        r'\bfire\s+(?:hit|struck|gutted|razed|destroyed|engulfed|swept)\s+(?:a\s+)?(?:\d+\s+)?(?:house|home|building|warehouse|factory|market|mall|store|shop|office|hotel)\b',
+        r'\b(?:house|building|apartment|warehouse|factory|market|mall|store|shop|office)\s+(?:was\s+)?(?:gutted|razed|destroyed|engulfed)\s+(?:by\s+)?fire\b',
+
+        # BFP (Bureau of Fire Protection) operational reports
+        r'\bBFP\b',
+        r'\bBureau\s+of\s+Fire\s+Protection\b',
+        r'\b(?:fire\s+(?:alarm|truck|engine|department|station|marshal|investigator|volunteer))\b',
+        r'\b(?:1st|2nd|3rd|4th|5th|first|second|third|fourth|fifth)\s+alarm\b',
+        r'\b(?:task\s+force)\s+(?:alpha|bravo|charlie|delta|echo)\b',
+        r'\b(?:firefighter|fireman|firemen|fire\s+brigade)\b',
+
+        # Arson/intentional fire
+        r'\b(?:arson(?:ist)?|incendiary)\b',
+        r'\bintentional(?:ly)?\s+(?:set|started)\s+(?:the\s+)?fire\b',
+
+        # Electrical/structural fire causes
+        r'\b(?:electrical|short\s+circuit|faulty\s+wiring|overloaded|overheating)\s+(?:fire|caused?\s+(?:the\s+)?fire)\b',
+        r'\b(?:LPG|gas\s+tank|stove|candle|cigarette)\s+(?:caused?|started?|triggered?)\s+(?:the\s+)?fire\b',
+
+        # Urban fire context
+        r'\b(?:fire\s+broke\s+out|fire\s+erupted|fire\s+started)\s+(?:in|at|inside)\s+(?:a\s+)?(?:house|home|building|apartment|factory|warehouse|slum|squatter|shanty)\b',
+
+        # Fire response / investigation (urban fire context)
+        r'\bfire\s+(?:investigation|investigator|scene|victim|survivor)\b',
+        r'\bfire\s+(?:insurance|claim|damage\s+assessment)\b',
+
+        # Residential area fires
+        r'\bfire\s+(?:in|at|hit|struck)\s+(?:a\s+)?(?:subdivision|village|compound|slum|squatter|settlement|barangay)\b',
+    ]
+
+    # =========================================================================
+    # WILDFIRE / NATURAL FIRE POSITIVE INDICATORS
+    # At least one must match to confirm wildfire context when hazard_type=fire
+    # =========================================================================
+
+    WILDFIRE_INDICATORS = [
+        r'\b(?:wildfire|wild\s+fire|forest\s+fire|brush\s+fire|grass\s+fire|bush\s+fire|wildland\s+fire|grassfire)\b',
+        r'\b(?:forest|mountain|grassland|hill(?:side)?|woodland|vegetation|timberland|sierra|watershed)\s+(?:fire|on\s+fire|ablaze|burning|burned|burnt)\b',
+        r'\b(?:fire)\s+(?:in|at|on|near|across|through|swept|spread(?:ing|s)?|rag(?:es?|ed|ing))\b.*\b(?:forest|mountain|grassland|hill(?:side)?|sierra|watershed|national\s+park|protected\s+area|woodland|reserve|timberland)\b',
+        r'\b(?:hectares?|acres?)\s+(?:of\s+)?(?:forest|grassland|vegetation|land|trees?|timber)\s+(?:burned|burnt|destroyed|razed|affected|consumed)\b',
+        r'\b(?:kaingin|slash.and.burn|open\s+burning)\b.*\b(?:spread|uncontrolled|out\s+of\s+control)\b',
+        r'\bDENR\b.*\b(?:fire|burning|burned|burnt)\b',
+        r'\b(?:fire)\b.*\b(?:Mt\.|Mount|mountain)\s+[A-Z]\w+\b',
+        r'\b(?:fire)\s+(?:spread(?:ing|s)?|rag(?:es?|ed|ing))\s+(?:in|across|through)\s+(?:the\s+)?(?:forest|mountain|grassland|hillside|woodland)\b',
+    ]
+
+    # =========================================================================
     # UNRELATED NEWS CATEGORIES (Crime, Politics, Sports, Entertainment, etc.)
     # These patterns identify content that is NOT about environmental hazards
     # =========================================================================
@@ -243,11 +298,11 @@ class ClimateNLIClassifier:
         r'\b(?:tsunami|tidal\s+wave)\b',
         r'\b(?:sinkhole|ground\s+fissure)\b',
 
-        # Fire hazards
-        r'\b(?:fire|blaze|inferno|conflagration|flames?)\b',
-        r'\b(?:wildfire|forest\s+fire|brush\s+fire|grass\s+fire)\b',
-        r'\b(?:burn(?:ing|ed|s)?|engulf(?:ed)?|gutted)\b',
-        r'\b(?:arson|BFP|firefighter|fire\s+(?:truck|engine|department))\b',
+        # Fire hazards - WILDFIRE ONLY (man-made/urban fires excluded by separate filter)
+        r'\b(?:wildfire|wild\s+fire|forest\s+fire|brush\s+fire|grass\s+fire|bush\s+fire|wildland\s+fire|grassfire)\b',
+        r'\b(?:fire)\s+(?:in|on|at|near)\s+(?:the\s+)?(?:forest|mountain|grassland|hill|woodland|watershed|park|reserve|sierra)\b',
+        r'\b(?:forest|mountain|grassland|hillside|woodland|vegetation)\s+(?:fire|ablaze|burning|burned|burnt)\b',
+        r'\b(?:kaingin|slash.and.burn)\b',
 
         # Water/Climate hazards
         r'\b(?:drought|dry\s+spell|water\s+shortage|el\s+niño)\b',
@@ -356,6 +411,8 @@ class ClimateNLIClassifier:
         self._research_re = [re.compile(p, re.IGNORECASE) for p in self.RESEARCH_PATTERNS]
         self._prevention_re = [re.compile(p, re.IGNORECASE) for p in self.PREVENTION_PATTERNS]
         self._non_hazard_re = [re.compile(p, re.IGNORECASE) for p in self.NON_HAZARD_PATTERNS]
+        self._man_made_fire_re = [re.compile(p, re.IGNORECASE) for p in self.MAN_MADE_FIRE_PATTERNS]
+        self._wildfire_indicators_re = [re.compile(p, re.IGNORECASE) for p in self.WILDFIRE_INDICATORS]
         self._active_hazard_re = [re.compile(p, re.IGNORECASE) for p in self.ACTIVE_HAZARD_INDICATORS]
         self._philippine_re = [re.compile(p, re.IGNORECASE) for p in self.PHILIPPINE_INDICATORS]
 
@@ -557,6 +614,38 @@ class ClimateNLIClassifier:
         is_relevant = match_count >= 1
 
         return is_relevant, match_count
+
+    def _is_wildfire(self, text: str) -> bool:
+        """
+        Determine if a fire-classified article is about wildfire (natural fire)
+        vs man-made/urban fire. Only wildfire reports should be accepted by the
+        RSS pipeline. Uses a two-signal approach: man-made indicators vs wildfire
+        indicators.
+
+        Returns:
+            True if the fire is a wildfire/natural fire, False if man-made/urban/ambiguous
+        """
+        man_made_matches = sum(1 for p in self._man_made_fire_re if p.search(text))
+        wildfire_matches = sum(1 for p in self._wildfire_indicators_re if p.search(text))
+
+        logger.debug(
+            f"Wildfire check: man_made_signals={man_made_matches}, wildfire_signals={wildfire_matches}"
+        )
+
+        # Clear wildfire with no man-made indicators
+        if wildfire_matches >= 1 and man_made_matches == 0:
+            return True
+
+        # Man-made indicators with no wildfire context
+        if man_made_matches >= 1 and wildfire_matches == 0:
+            return False
+
+        # Both present: wildfire signals must strictly outnumber man-made
+        if wildfire_matches > man_made_matches:
+            return True
+
+        # Ambiguous or no indicators → reject (conservative: avoid false positives)
+        return False
 
     def _detect_hazard_context(self, text: str) -> Dict:
         """
@@ -793,6 +882,15 @@ class ClimateNLIClassifier:
                     )
                     is_hazard = False
 
+            # Wildfire-only filter: reject man-made/urban fires, accept only wildfires
+            if is_hazard and top_label == 'fire':
+                is_wildfire_event = self._is_wildfire(text_truncated)
+                if not is_wildfire_event:
+                    logger.info(
+                        f"Rejected: Fire classified but not wildfire (likely man-made/urban fire)"
+                    )
+                    is_hazard = False
+
             logger.info(
                 f"Classification: {top_label} | "
                 f"raw={raw_score:.3f} → adjusted={adjusted_score:.3f} | "
@@ -902,6 +1000,8 @@ class ClimateNLIClassifier:
             'research_patterns': len(self.RESEARCH_PATTERNS),
             'prevention_patterns': len(self.PREVENTION_PATTERNS),
             'non_hazard_patterns': len(self.NON_HAZARD_PATTERNS),
+            'man_made_fire_patterns': len(self.MAN_MADE_FIRE_PATTERNS),
+            'wildfire_indicators': len(self.WILDFIRE_INDICATORS),
             'crime_patterns': len(self.CRIME_PATTERNS),
             'politics_patterns': len(self.POLITICS_PATTERNS),
             'sports_patterns': len(self.SPORTS_PATTERNS),

@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict
 import httpx
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Request, Depends
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Request
 from pydantic import BaseModel, Field, validator
 
 # Add parent directory to path for lib imports
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.supabase_client import supabase
 
 # Rate limiting to prevent report spam (CR-03)
-from backend.python.middleware.redis_rate_limiter import RateLimitCitizenReport, get_redis
+from backend.python.middleware.redis_rate_limiter import get_redis
 
 # Import ActivityLogger for comprehensive activity tracking
 from backend.python.middleware.activity_logger import ActivityLogger
@@ -143,7 +143,7 @@ async def verify_turnstile(token: str, remoteip: Optional[str] = None) -> dict:
 # =============================================================================
 
 # Per-IP cooldown (seconds) between report submissions to prevent burst spam
-SUBMISSION_COOLDOWN_SECONDS = 180  # 3 minutes
+SUBMISSION_COOLDOWN_SECONDS = 300  # 5 minutes
 
 
 def _get_client_identifier(request: Request) -> str:
@@ -158,7 +158,6 @@ def _get_client_identifier(request: Request) -> str:
 @router.post("/submit", response_model=ReportSubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_citizen_report(
     request: Request,
-    _rate_limit: None = Depends(RateLimitCitizenReport),
     # captcha_token: str = Form(..., description="Cloudflare Turnstile token"),  # TEMPORARILY DISABLED
     captcha_token: Optional[str] = Form(None, description="Cloudflare Turnstile token (optional)"),
     hazard_type: str = Form(..., description="Type of hazard"),

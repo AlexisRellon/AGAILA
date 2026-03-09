@@ -44,6 +44,7 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { adminApi } from '../../lib/api';
+import { toast } from 'sonner';
 
 interface TriageReport {
   id: string;
@@ -212,10 +213,11 @@ const ReportTriage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [editedCoordinates, setEditedCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [coordinateError, setCoordinateError] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Fetch reports with React Query
   const { 
-    data: reports = [], 
+    data: rawReports, 
     isLoading, 
     error: queryError, 
     refetch 
@@ -246,6 +248,7 @@ const ReportTriage: React.FC = () => {
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
+  const reports = useMemo(() => rawReports ?? [], [rawReports]);
   const error = queryError ? (queryError as Error).message : null;
 
   useEffect(() => {
@@ -501,6 +504,7 @@ const ReportTriage: React.FC = () => {
   const handleAction = (report: TriageReport, action: 'validate' | 'reject') => {
     setSelectedReport(report);
     setActionType(action);
+    setRejectionReason('');
     setIsActionDialogOpen(true);
   };
 
@@ -512,7 +516,12 @@ const ReportTriage: React.FC = () => {
     }
 
     if (actionType === 'validate' && coordinateError) {
-      alert('Please resolve the coordinate error before validating.');
+      toast.warning('Please resolve the coordinate error before validating.');
+      return;
+    }
+
+    if (actionType === 'reject' && !rejectionReason.trim()) {
+      toast.warning('Please provide a reason for rejecting this report.');
       return;
     }
 
@@ -540,25 +549,36 @@ const ReportTriage: React.FC = () => {
         // eslint-disable-next-line no-console
         console.log('[ReportTriage] Validate result:', result);
       } else {
-        const result = await adminApi.reports.reject(selectedReport.tracking_id);
+        const result = await adminApi.reports.reject(selectedReport.tracking_id, {
+          reason: rejectionReason.trim(),
+        });
         // eslint-disable-next-line no-console
         console.log('[ReportTriage] Reject result:', result);
       }
       
       // eslint-disable-next-line no-console
       console.log('[ReportTriage] Refetching reports...');
-      // Refresh reports using React Query refetch
       await refetch();
       
-      // eslint-disable-next-line no-console
-      console.log('[ReportTriage] Closing dialog');
+      const trackingId = selectedReport.tracking_id;
       setIsActionDialogOpen(false);
       setSelectedReport(null);
       setActionType(null);
+
+      if (actionType === 'validate') {
+        toast.success(`Report ${trackingId} validated`, {
+          description: 'The report has been approved and added to the hazard map.',
+        });
+      } else {
+        toast.success(`Report ${trackingId} rejected`, {
+          description: 'The report has been rejected and will not appear on the map.',
+        });
+      }
     } catch (err) {
       console.error(`[ReportTriage] Error ${actionType} report:`, err);
-      // Show error toast (could add toast notification here)
-      alert(`Failed to ${actionType} report: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to ${actionType} report`, {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -971,6 +991,26 @@ const ReportTriage: React.FC = () => {
                   </div>
                 )}
 
+                {actionType === 'reject' && (
+                  <div className="space-y-2">
+                    <label htmlFor="rejection-reason" className="text-sm font-medium">
+                      Reason for rejection <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="rejection-reason"
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Explain why this report is being rejected..."
+                      maxLength={500}
+                      rows={3}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    />
+                    <p className="text-xs text-muted-foreground text-right">
+                      {rejectionReason.length}/500
+                    </p>
+                  </div>
+                )}
+
                 <Alert className={actionType === 'validate' ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}>
                   <AlertCircle className={actionType === 'validate' ? 'h-4 w-4 text-green-600' : 'h-4 w-4 text-red-600'} />
                   <AlertDescription className={actionType === 'validate' ? 'text-green-800' : 'text-red-800'}>
@@ -994,7 +1034,7 @@ const ReportTriage: React.FC = () => {
               <Button
                 type="button"
                 onClick={confirmAction}
-                disabled={isProcessing || (actionType === 'validate' && Boolean(coordinateError))}
+                disabled={isProcessing || (actionType === 'validate' && Boolean(coordinateError)) || (actionType === 'reject' && !rejectionReason.trim())}
                 variant={actionType === 'validate' ? 'default' : 'destructive'}
               >
                 {isProcessing ? 'Processing...' : actionType === 'validate' ? 'Confirm Validation' : 'Confirm Rejection'}

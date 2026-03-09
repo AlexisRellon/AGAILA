@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { landingAssets } from '../../constants/landingAssets';
 
+
 export const Footer: React.FC = () => {
   const navigationLinks = [
     { label: 'Home', to: '/' },
@@ -9,6 +10,8 @@ export const Footer: React.FC = () => {
     { label: 'Hazard Map', to: '/map' },
     { label: 'Status', to: '/status' },
   ];
+
+  const currentYear = new Date().getFullYear(); // Get the current four-digit year
 
   return (
     <footer className="w-full bg-[#171717]">
@@ -88,10 +91,11 @@ export const Footer: React.FC = () => {
         </div>
       </div>
 
+
         {/* Copyright Bar */}
         <div className="border-t border-white py-5 flex items-center justify-center">
           <p className="font-lato text-[12px] sm:text-[13px] leading-[20px] text-white text-center">
-            © 2025 GAIA. All rights reserved.
+            © {currentYear} AGAILA. All rights reserved.
           </p>
         </div>
       </div>

@@ -128,6 +128,11 @@ class RSSProcessor:
                     
                     # Only process if classified as hazard
                     if classification['is_hazard']:
+                        # Wildfire filter: if classified as fire, the classifier
+                        # already validates it's a wildfire. Double-check by logging.
+                        if classification.get('hazard_type') == 'fire':
+                            logger.info(f"Fire article passed wildfire filter: {entry.get('title', 'Unknown')}")
+
                         # Extract locations (run in thread pool to avoid blocking event loop)
                         locations = await loop.run_in_executor(
                             None,

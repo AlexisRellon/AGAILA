@@ -90,6 +90,16 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     }),
+
+    reactivate: (userId: string, reason?: string) => apiRequest(`/api/v1/admin/users/${userId}/reactivate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+
+    resetPassword: (userId: string, newPassword: string) => apiRequest(`/api/v1/admin/users/${userId}/reset-password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
   },
 
   // Audit Logs
@@ -166,9 +176,9 @@ export const adminApi = {
       });
     },
 
-    reject: (trackingId: string, payload?: { notes?: string | null }) => {
-      const body: Record<string, unknown> = {};
-      if (payload?.notes !== undefined) {
+    reject: (trackingId: string, payload: { reason: string; notes?: string | null }) => {
+      const body: Record<string, unknown> = { reason: payload.reason };
+      if (payload.notes !== undefined) {
         body.notes = payload.notes;
       }
 
