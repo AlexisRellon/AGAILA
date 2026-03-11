@@ -296,6 +296,80 @@ PROVINCE_TO_REGION: Dict[str, Dict[str, str]] = {
 # Helper Functions
 # ============================================================================
 
+# ============================================================================
+# Philippine Volcanoes & Landmarks to Region Mapping
+# Maps well-known geographic features to their administrative locations.
+# Enables correct region resolution when articles mention e.g. "Mayon" instead
+# of a city or province name.
+# ============================================================================
+
+PHILIPPINE_LANDMARKS: Dict[str, Dict[str, str]] = {
+    # --- Active / Well-known Volcanoes ---
+    "Mayon": {"province": "Albay", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mayon Volcano": {"province": "Albay", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mount Mayon": {"province": "Albay", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mt. Mayon": {"province": "Albay", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+
+    "Taal": {"province": "Batangas", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "volcano"},
+    "Taal Volcano": {"province": "Batangas", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "volcano"},
+    "Mount Taal": {"province": "Batangas", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "volcano"},
+
+    "Pinatubo": {"province": "Zambales", "region": "Region III", "region_name": "Central Luzon", "landmark_type": "volcano"},
+    "Mount Pinatubo": {"province": "Zambales", "region": "Region III", "region_name": "Central Luzon", "landmark_type": "volcano"},
+    "Mt. Pinatubo": {"province": "Zambales", "region": "Region III", "region_name": "Central Luzon", "landmark_type": "volcano"},
+
+    "Kanlaon": {"province": "Negros Occidental", "region": "Region VI", "region_name": "Western Visayas", "landmark_type": "volcano"},
+    "Kanlaon Volcano": {"province": "Negros Occidental", "region": "Region VI", "region_name": "Western Visayas", "landmark_type": "volcano"},
+    "Mount Kanlaon": {"province": "Negros Occidental", "region": "Region VI", "region_name": "Western Visayas", "landmark_type": "volcano"},
+    "Mt. Kanlaon": {"province": "Negros Occidental", "region": "Region VI", "region_name": "Western Visayas", "landmark_type": "volcano"},
+    "Canlaon": {"province": "Negros Occidental", "region": "Region VI", "region_name": "Western Visayas", "landmark_type": "volcano"},
+
+    "Bulusan": {"province": "Sorsogon", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Bulusan Volcano": {"province": "Sorsogon", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mount Bulusan": {"province": "Sorsogon", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+
+    "Hibok-Hibok": {"province": "Camiguin", "region": "Region X", "region_name": "Northern Mindanao", "landmark_type": "volcano"},
+    "Mount Hibok-Hibok": {"province": "Camiguin", "region": "Region X", "region_name": "Northern Mindanao", "landmark_type": "volcano"},
+
+    "Apo": {"province": "Davao del Sur", "region": "Region XI", "region_name": "Davao Region", "landmark_type": "volcano"},
+    "Mount Apo": {"province": "Davao del Sur", "region": "Region XI", "region_name": "Davao Region", "landmark_type": "volcano"},
+    "Mt. Apo": {"province": "Davao del Sur", "region": "Region XI", "region_name": "Davao Region", "landmark_type": "volcano"},
+
+    "Smith": {"province": "Bataan", "region": "Region III", "region_name": "Central Luzon", "landmark_type": "volcano"},
+    "Mount Smith": {"province": "Bataan", "region": "Region III", "region_name": "Central Luzon", "landmark_type": "volcano"},
+
+    "Banahaw": {"province": "Quezon", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "volcano"},
+    "Mount Banahaw": {"province": "Quezon", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "volcano"},
+
+    "Isarog": {"province": "Camarines Sur", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mount Isarog": {"province": "Camarines Sur", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+
+    "Iriga": {"province": "Camarines Sur", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+    "Mount Iriga": {"province": "Camarines Sur", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+
+    "Ragang": {"province": "Lanao del Sur", "region": "BARMM", "region_name": "Bangsamoro Autonomous Region", "landmark_type": "volcano"},
+    "Mount Ragang": {"province": "Lanao del Sur", "region": "BARMM", "region_name": "Bangsamoro Autonomous Region", "landmark_type": "volcano"},
+
+    "Matutum": {"province": "South Cotabato", "region": "Region XII", "region_name": "SOCCSKSARGEN", "landmark_type": "volcano"},
+    "Mount Matutum": {"province": "South Cotabato", "region": "Region XII", "region_name": "SOCCSKSARGEN", "landmark_type": "volcano"},
+
+    "Parker": {"province": "South Cotabato", "region": "Region XII", "region_name": "SOCCSKSARGEN", "landmark_type": "volcano"},
+    "Mount Parker": {"province": "South Cotabato", "region": "Region XII", "region_name": "SOCCSKSARGEN", "landmark_type": "volcano"},
+
+    "Musuan": {"province": "Bukidnon", "region": "Region X", "region_name": "Northern Mindanao", "landmark_type": "volcano"},
+    "Mount Musuan": {"province": "Bukidnon", "region": "Region X", "region_name": "Northern Mindanao", "landmark_type": "volcano"},
+
+    "Leonard Kniaseff": {"province": "Sorsogon", "region": "Region V", "region_name": "Bicol Region", "landmark_type": "volcano"},
+
+    "Mayabobo": {"province": "Agusan del Sur", "region": "Region XIII", "region_name": "Caraga", "landmark_type": "volcano"},
+
+    # --- Lakes commonly referenced in hazard context ---
+    "Taal Lake": {"province": "Batangas", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "lake"},
+    "Laguna de Bay": {"province": "Laguna", "region": "Region IV-A", "region_name": "CALABARZON", "landmark_type": "lake"},
+    "Lake Lanao": {"province": "Lanao del Sur", "region": "BARMM", "region_name": "Bangsamoro Autonomous Region", "landmark_type": "lake"},
+}
+
+
 def get_region_from_location(
     city: Optional[str] = None,
     province: Optional[str] = None
@@ -326,6 +400,13 @@ def get_region_from_location(
         
         # Try case-insensitive match
         for key, value in PHILIPPINE_ADMIN_MAPPING.items():
+            if key.lower() == city_clean.lower():
+                return value
+        
+        # Try landmark lookup (volcanoes, lakes, etc.)
+        if city_clean in PHILIPPINE_LANDMARKS:
+            return PHILIPPINE_LANDMARKS[city_clean]
+        for key, value in PHILIPPINE_LANDMARKS.items():
             if key.lower() == city_clean.lower():
                 return value
     

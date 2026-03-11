@@ -20,7 +20,8 @@ from philippine_regions import (
     get_region_from_location,
     normalize_location_with_region,
     PHILIPPINE_ADMIN_MAPPING,
-    PROVINCE_TO_REGION
+    PROVINCE_TO_REGION,
+    PHILIPPINE_LANDMARKS
 )
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,22 @@ class GeoNER:
                                 'region_name': region_info.get('region_name')
                             })
                     
+                    # Fallback: check if the entity name itself is a known landmark
+                    if not location_data.get('region'):
+                        landmark_info = PHILIPPINE_LANDMARKS.get(location_name)
+                        if not landmark_info:
+                            for lm_key, lm_val in PHILIPPINE_LANDMARKS.items():
+                                if lm_key.lower() == location_name.lower():
+                                    landmark_info = lm_val
+                                    break
+                        if landmark_info:
+                            location_data.update({
+                                'province': landmark_info.get('province'),
+                                'region': landmark_info.get('region'),
+                                'region_name': landmark_info.get('region_name'),
+                                'location_type': landmark_info.get('landmark_type', 'landmark'),
+                            })
+                    
                     locations.append(location_data)
             
             # Add Philippines-specific locations (higher priority)
@@ -308,6 +325,34 @@ class GeoNER:
                 
                 locations.append(location_data)
         
+        # Match landmarks (volcanoes, lakes, etc.) from PHILIPPINE_LANDMARKS
+        for landmark_name, landmark_data in PHILIPPINE_LANDMARKS.items():
+            pattern = rf"\b{re.escape(landmark_name)}\b"
+            if re.search(pattern, text, re.IGNORECASE):
+                # Skip if a more specific match (city/province) already covers this location
+                if any(loc['location_name'].lower() == landmark_name.lower() for loc in locations):
+                    continue
+
+                location_data = {
+                    'location_name': landmark_name,
+                    'location_type': landmark_data.get('landmark_type', 'landmark'),
+                    'confidence': 0.93,
+                    'source': 'pattern',
+                    'country': 'Philippines',
+                    'province': landmark_data.get('province'),
+                    'region': landmark_data.get('region'),
+                    'region_name': landmark_data.get('region_name')
+                }
+
+                coords = self._geocode_location(f"{landmark_name}, Philippines")
+                if coords and 'latitude' in coords and 'longitude' in coords:
+                    location_data.update({
+                        'latitude': coords['latitude'],
+                        'longitude': coords['longitude']
+                    })
+
+                locations.append(location_data)
+
         # Match barangays (local administrative divisions) - limit to 2-5 words
         for match in re.finditer(r"\b(?:Barangay|Brgy\.?|Sitio|Purok)\s+([A-Z][A-Za-z\-']+(?:\s+[A-Z][A-Za-z\-']+){0,4})\b", text):
             barangay_name = match.group(1).strip()
