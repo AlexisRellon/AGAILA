@@ -6,7 +6,7 @@ Integrates with Classifier and Geo-NER for hazard detection pipeline.
 
 import feedparser
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from dateutil import parser as date_parser
 from bs4 import BeautifulSoup
 import logging
@@ -275,15 +275,19 @@ class RSSProcessor:
         Returns:
             dict: Hazard data ready for database insertion
         """
-        # Parse published date
+        # Parse published date (timezone-aware; default to PHT for Philippine feeds)
+        PHT = timezone(timedelta(hours=8))
         published_date = None
-        if hasattr(entry, 'published_parsed') and entry.published_parsed:
-            published_date = datetime(*entry.published_parsed[:6])
-        elif hasattr(entry, 'published'):
+        if hasattr(entry, 'published') and entry.published:
             try:
-                published_date = date_parser.parse(entry.published)
-            except:
+                parsed = date_parser.parse(entry.published)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=PHT)
+                published_date = parsed
+            except Exception:
                 pass
+        if published_date is None and hasattr(entry, 'published_parsed') and entry.published_parsed:
+            published_date = datetime(*entry.published_parsed[:6], tzinfo=PHT)
         
         # Build hazard data structure
         hazard_data = {
