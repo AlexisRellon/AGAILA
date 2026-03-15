@@ -36,10 +36,10 @@ export const HowItWorksSection: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start justify-center w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row lg:items-start lg:gap-0 gap-6 w-full">
         {steps.map((step, index) => (
           <React.Fragment key={index}>
-            <div className="flex flex-col gap-2 items-start overflow-visible w-full">
+            <div className="flex flex-col gap-2 items-start overflow-visible w-full lg:flex-1">
               <p className="flex flex-col font-lato font-black justify-center text-[44px] sm:text-[52px] md:text-[61px] leading-[1.1] text-[#575757] w-full">
                 {step.number}
               </p>
@@ -50,16 +50,15 @@ export const HowItWorksSection: React.FC = () => {
                 {step.description}
               </p>
             </div>
-            
+
             {index < steps.length - 1 && (
-              <div className="hidden lg:flex items-center justify-center relative shrink-0">
-                <div className="flex-none scale-y-[-100%]">
-                  <img 
-                    src={landingAssets.icons.arrowRight} 
-                    alt="" 
-                    className="w-[50px] h-[50px]"
-                  />
-                </div>
+              <div className="hidden lg:flex items-start justify-center flex-shrink-0 pt-8 px-2">
+                <img
+                  src={landingAssets.icons.arrowRight}
+                  alt=""
+                  aria-hidden="true"
+                  className="w-[40px] h-[40px] opacity-50"
+                />
               </div>
             )}
           </React.Fragment>
