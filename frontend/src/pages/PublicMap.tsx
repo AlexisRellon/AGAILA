@@ -210,6 +210,13 @@ const PublicMap: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchHazards]);
 
+  // Close mobile controls panel whenever the sidebar opens so they don't overlap
+  useEffect(() => {
+    if (isSidebarOpen) {
+      setIsMobileControlsOpen(false);
+    }
+  }, [isSidebarOpen]);
+
   // Default map center: Manila, Philippines
   const philippinesCenter: [number, number] = [14.5995, 120.9842];
   const defaultZoom = 6;
