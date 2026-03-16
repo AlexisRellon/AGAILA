@@ -120,3 +120,4 @@ QUICK_TEST_GUIDE*.md
 /.env.production
 /.claude
 /fix_testcases.py
+/tests/e2e_cache_test.py

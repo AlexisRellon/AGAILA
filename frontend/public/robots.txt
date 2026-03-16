@@ -1,0 +1,21 @@
+# AGAILA - Geospatial AI-driven Assessment for Philippine Environmental Hazard Detection
+# https://agaila-ph.vercel.app/
+
+User-agent: *
+Allow: /
+Allow: /map
+Allow: /report
+Allow: /track
+Allow: /status
+Allow: /login
+Allow: /reset-password
+
+# Auth-gated and transient pages — exclude from indexing
+Disallow: /dashboard
+Disallow: /update-password
+Disallow: /report-confirmation/
+
+# Crawl delay (optional, adjust if needed)
+Crawl-delay: 10
+
+Sitemap: https://agaila-ph.vercel.app/sitemap.xml

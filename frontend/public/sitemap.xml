@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+          http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Landing Page -->
+  <url>
+    <loc>https://agaila.vercel.app/</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Public Hazard Map -->
+  <url>
+    <loc>https://agaila.vercel.app/map</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- System Status -->
+  <url>
+    <loc>https://agaila.vercel.app/status</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Citizen Hazard Report Form -->
+  <url>
+    <loc>https://agaila.vercel.app/report</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Report Tracking -->
+  <url>
+    <loc>https://agaila.vercel.app/track</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Login -->
+  <url>
+    <loc>https://agaila.vercel.app/login</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- Password Reset -->
+  <url>
+    <loc>https://agaila.vercel.app/reset-password</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <!--
+    Excluded routes (not indexed):
+      /dashboard             — requires authentication
+      /update-password       — transient post-reset flow
+      /report-confirmation/* — dynamic per-tracking-ID pages
+  -->
+
+</urlset>
