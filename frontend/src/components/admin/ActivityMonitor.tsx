@@ -94,6 +94,13 @@ function exportToCSV(data: ActivityLog[]) {
   toast.success(`Exported ${data.length} logs`);
 }
 
+/**
+ * Activity Monitor UI showing a searchable, sortable, and paginated table of recent user activity with export and detail drill-down.
+ *
+ * The table auto-refreshes every 30 seconds, supports column filtering and sorting, allows exporting visible logs to CSV, and opens a details dialog for individual log entries.
+ *
+ * @returns The rendered Activity Monitor React element
+ */
 export default function ActivityMonitor() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -190,12 +197,12 @@ export default function ActivityMonitor() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-y-2">
           <div>
             <CardTitle>Activity Monitor</CardTitle>
             <CardDescription>Real-time user actions (auto-refreshes every 30s)</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
               <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             </Button>
@@ -206,7 +213,7 @@ export default function ActivityMonitor() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <Input
             placeholder="Filter by user..."
             value={(table.getColumn('user_email')?.getFilterValue() as string) ?? ''}
@@ -221,7 +228,7 @@ export default function ActivityMonitor() {
           />
         </div>
         {/* Controls */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-y-2">
           <div className="text-sm text-muted-foreground">
             Showing {table.getRowModel().rows.length} of {logs.length} logs
           </div>
@@ -236,7 +243,7 @@ export default function ActivityMonitor() {
           </div>
         </div>
 
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -267,7 +274,7 @@ export default function ActivityMonitor() {
           </Table>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-y-2">
           <div className="text-sm text-muted-foreground">
             Showing {table.getRowModel().rows.length} of {logs.length} logs
           </div>
@@ -291,7 +298,7 @@ export default function ActivityMonitor() {
           </DialogHeader>
           {detailsDialog.log && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><p className="text-sm font-medium text-muted-foreground">User</p><p className="text-sm">{detailsDialog.log.user_email}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Role</p><p className="text-sm">{detailsDialog.log.user_role}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Action</p><Badge variant="outline" className={`border ${getActionBadgeStyle(detailsDialog.log.action)}`}>{detailsDialog.log.action}</Badge></div>

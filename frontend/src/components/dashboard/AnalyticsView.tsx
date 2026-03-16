@@ -61,6 +61,17 @@ const HAZARD_COLORS: Record<string, string> = {
   storm_surge: COLORS.primary,
 };
 
+/**
+ * Render the AnalyticsView component that displays hazard KPIs, interactive charts, and recent alerts.
+ *
+ * Shows four KPI cards, a tabbed "Hazard Analytics" card with Trends, Distribution, Regions, and Recent Alerts,
+ * and an alert banner when a data-fetch error occurs. Uses React Query hooks to fetch stats, trends,
+ * region stats, distribution, and recent alerts; displays a full skeleton while all sources are loading and
+ * updates the trends chart window via internal `trendDays` state and the visible view via `activeTab` state.
+ *
+ * @returns The AnalyticsView React element containing KPI cards, the tabbed analytics charts (trends, distribution, regions),
+ * and a list of recent alerts (or a placeholder when none exist).
+ */
 export default function AnalyticsView() {
   const [trendDays, setTrendDays] = useState(30);
   const [activeTab, setActiveTab] = useState('trends');
@@ -160,7 +171,7 @@ export default function AnalyticsView() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 !h-auto">
               <TabsTrigger value="trends" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Trends
               </TabsTrigger>

@@ -133,7 +133,15 @@ function KPICard({
 
 // ============================================================================
 // MAIN COMPONENT
-// ============================================================================
+/**
+ * Render the RSS Statistics dashboard with KPIs, charts, and controls for managing RSS feed processing.
+ *
+ * Displays real-time metrics (total feeds, hazards, success rate, avg processing time), a bar chart of top feeds by hazards,
+ * a pie chart of feed status distribution, duplicate detection performance, and system health indicators.
+ * Provides an auto-refresh toggle and a guarded "Process Now" action that triggers immediate feed processing.
+ *
+ * @returns A React element representing the RSS statistics dashboard UI.
+ */
 
 export function RSSStatistics() {
   // State
@@ -233,7 +241,7 @@ export function RSSStatistics() {
   return (
     <div className="w-full space-y-6">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-4">
           <div className="flex items-center space-x-2">
             <Switch

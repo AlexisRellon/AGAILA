@@ -13,9 +13,16 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Alert } from '../components/ui/alert';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { landingAssets } from '../constants/landingAssets';
 
+/**
+ * Renders the stakeholder login page with email/password inputs, password visibility toggle, error display, and branding.
+ *
+ * The component redirects to '/dashboard' when a user is already authenticated and navigates to '/dashboard' after a successful sign-in. On login failure it clears the password and surfaces a user-friendly error message.
+ *
+ * @returns The React element for the login page containing the brand panel and the login form UI.
+ */
 export default function Login() {
   const navigate = useNavigate();
   const { signIn, user } = useAuth();
@@ -91,134 +98,160 @@ export default function Login() {
   // };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 px-4">
-      <Card className="w-full max-w-md p-8 space-y-6">
-        {/* Header with Logo */}
-        <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <img 
-              src={landingAssets.logo.gaia} 
-              alt="GAIA Logo" 
-              className="h-16 w-auto"
-            />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">Stakeholder Login</h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your credentials to access the dashboard
+    <div className="min-h-screen flex">
+      {/* ── Brand Panel (desktop left column) ── */}
+      <div className="hidden lg:flex lg:w-[420px] xl:w-[460px] flex-shrink-0 auth-brand-panel flex-col items-center justify-center p-12 relative overflow-hidden">
+        {/* Orange accent strip */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-[#FF7A00]" />
+
+        <div className="relative z-10 flex flex-col items-center text-center gap-8">
+          <img
+            src={landingAssets.logos.gaiaWhite}
+            alt="GAIA Logo"
+            className="w-44 h-auto"
+          />
+
+          <div className="space-y-3">
+            <h2 className="text-2xl font-lato font-bold text-white leading-snug">
+              Geospatial AI-driven<br />Assessment
+            </h2>
+            <p className="text-sm text-blue-200 leading-relaxed max-w-[260px]">
+              Real-time environmental hazard intelligence for disaster risk reduction across the Philippines.
             </p>
           </div>
+
+          <div className="w-10 h-0.5 bg-[#FF7A00] rounded-full" />
+
+          <p className="text-[11px] font-medium text-blue-300 uppercase tracking-[0.15em]">
+            Authorized Personnel Only
+          </p>
         </div>
+      </div>
 
-        {/* Error Alert */}
-        {error && (
-          <Alert variant="destructive" className="bg-red-50 border-red-200">
-            <p className="text-sm text-red-800">{error}</p>
-          </Alert>
-        )}
+      {/* ── Form Panel (right / full on mobile) ── */}
+      <div className="flex-1 flex items-center justify-center bg-auth px-4 py-12 min-h-screen">
+        <div className="w-full max-w-md">
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="user@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-              className="w-full"
+          {/* Mobile-only logo */}
+          <div className="lg:hidden flex justify-center mb-8">
+            <img
+              src={landingAssets.logo.gaia}
+              alt="GAIA Logo"
+              className="h-14 w-auto"
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-                className="w-full pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary rounded"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+          {/* Form Card */}
+          <Card className="p-8 space-y-6 shadow-lg bg-white rounded-xl border border-slate-200 border-t-[3px] border-t-[#0A2A4D]">
+
+            {/* Heading */}
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold tracking-tight text-[#0A2A4D]">
+                Stakeholder Login
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Enter your credentials to access the dashboard
+              </p>
+            </div>
+
+            {/* Error Alert */}
+            {error && (
+              <Alert variant="destructive" className="bg-red-50 border-red-200 py-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800">{error}</p>
+              </Alert>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium text-slate-700">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="w-full h-10"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="password" className="text-sm font-medium text-slate-700">
+                  Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="w-full h-10 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005A9C] rounded transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    disabled={loading}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Forgot password */}
+              <div className="flex justify-end -mt-1">
+                <Link
+                  to="/reset-password"
+                  className="text-xs text-[#005A9C] hover:text-[#0A2A4D] hover:underline transition-colors"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-10 bg-[#0A2A4D] hover:bg-[#0A2A4D]/90 text-white font-medium"
                 disabled={loading}
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
+                {loading ? (
+                  <span className="flex items-center gap-2" role="status" aria-live="polite">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true" />
+                    <span>Logging in…</span>
+                  </span>
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  'Login'
                 )}
-              </button>
+              </Button>
+            </form>
+
+            {/* Cloudflare Turnstile - TEMPORARILY DISABLED */}
+            {/* <div className="flex justify-center">
+              <Turnstile ref={turnstileRef} ... />
+            </div> */}
+
+            {/* Footer links */}
+            <div className="pt-2 border-t border-slate-100 space-y-3 text-center">
+              <Link to="/" className="inline-block text-sm text-muted-foreground hover:text-[#0A2A4D] transition-colors">
+                ← Back to Home
+              </Link>
+              <p className="text-xs text-muted-foreground">
+                Account registration is managed by administrators.
+                <br />
+                Contact your organization&apos;s admin for access.
+              </p>
             </div>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="flex items-center gap-2" role="status" aria-live="polite">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" aria-hidden="true"></div>
-                <span>Logging in...</span>
-              </span>
-            ) : (
-              'Login'
-            )}
-          </Button>
-        </form>
-
-        {/* Cloudflare Turnstile - TEMPORARILY DISABLED */}
-        {/* <div className="flex justify-center">
-          <Turnstile
-            ref={turnstileRef}
-            siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || ''}
-            onSuccess={handleTurnstileSuccess}
-            onError={handleTurnstileError}
-            onExpire={handleTurnstileExpire}
-          />
-        </div> */}
-
-        {/* Forgot Password Link */}
-        <div className="text-center">
-          <Link 
-            to="/reset-password" 
-            className="text-sm text-primary hover:underline"
-          >
-            Forgot your password?
-          </Link>
+          </Card>
         </div>
-
-        {/* Back to Home */}
-        <div className="text-center">
-          <Link to="/" className="text-sm text-muted-foreground hover:text-primary">
-            ← Back to Home
-          </Link>
-        </div>
-
-        {/* Admin Note */}
-        <div className="pt-4 border-t">
-          <p className="text-xs text-center text-muted-foreground">
-            Account registration is managed by administrators.
-            <br />
-            Contact your organization&apos;s admin for access.
-          </p>
-        </div>
-      </Card>
+      </div>
     </div>
   );
 }
