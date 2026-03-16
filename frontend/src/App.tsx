@@ -57,7 +57,7 @@ const AppContent = () => {
             <span className="sr-only">Loading...</span>
           </div>
         }>
-        <Routes>
+          <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/map" element={<PublicMap />} />
             <Route path="/report" element={<CitizenReportForm />} />
@@ -98,7 +98,7 @@ const AppContent = () => {
             } />
           </Routes>
         </React.Suspense>
-          <Toaster />
+        <Toaster />
         </main>
       </Router>
   );
