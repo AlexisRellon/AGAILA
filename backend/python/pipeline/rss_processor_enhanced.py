@@ -11,7 +11,7 @@ Security: Input sanitization, duplicate detection, content hashing, URL validati
 import feedparser
 import time
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil import parser as date_parser
 from bs4 import BeautifulSoup
 import logging
@@ -154,6 +154,9 @@ class RSSProcessorEnhanced:
             'errors': 0
         }
         
+        # Track normalized titles within this batch to catch cross-feed duplicates
+        self._batch_seen_titles: set = set()
+        
         results = []
         
         for feed_url in self.feeds:
@@ -276,6 +279,11 @@ class RSSProcessorEnhanced:
                                 hazards_saved.append(hazard_summary)
                                 items_added += 1
                                 self.stats['total_stored'] += 1
+                                
+                                # Track title in batch set to prevent cross-feed duplicates
+                                if hasattr(self, '_batch_seen_titles') and content_data.get('title'):
+                                    self._batch_seen_titles.add(' '.join(content_data['title'].lower().split()))
+                                
                                 logger.info(f"✓ Saved hazard: {content_data['title']} (ID: {hazard_id})")
                             else:
                                 logger.error(f"✗ Failed to save hazard: {entry.get('title', 'Unknown')}")
@@ -546,14 +554,18 @@ class RSSProcessorEnhanced:
                             if self._normalize_url(row.get('source_url', '')) == normalized_url:
                                 return True, row['id']
             
-            # Strategy 2: Check exact article title within time window
+            # Strategy 2: Check exact article title (no time window - exact title = always duplicate)
             if content_data.get('title'):
                 normalized_title = ' '.join(content_data['title'].lower().split())
+                
+                # Check in-memory batch set first (catches same-batch duplicates across feeds)
+                if hasattr(self, '_batch_seen_titles') and normalized_title in self._batch_seen_titles:
+                    logger.info(f"Batch-level duplicate title: '{normalized_title[:60]}'")
+                    return True, None
                 
                 response = supabase.schema('gaia').from_('hazards') \
                     .select('id') \
                     .eq('source_title', normalized_title) \
-                    .gte('detected_at', time_threshold.isoformat()) \
                     .limit(1) \
                     .execute()
                 
@@ -638,15 +650,19 @@ class RSSProcessorEnhanced:
             str: Hazard UUID if successful, None otherwise
         """
         try:
-            # Parse published date
+            # Parse published date (timezone-aware; default to PHT for Philippine feeds)
+            PHT = timezone(timedelta(hours=8))
             published_date = None
-            if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                published_date = datetime(*entry.published_parsed[:6])
-            elif hasattr(entry, 'published'):
+            if hasattr(entry, 'published') and entry.published:
                 try:
-                    published_date = date_parser.parse(entry.published)
-                except:
+                    parsed = date_parser.parse(entry.published)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=PHT)
+                    published_date = parsed
+                except Exception:
                     pass
+            if published_date is None and hasattr(entry, 'published_parsed') and entry.published_parsed:
+                published_date = datetime(*entry.published_parsed[:6], tzinfo=PHT)
             
             # Use primary location (first one with coordinates)
             primary_location = None

@@ -123,6 +123,16 @@ const navigationItems: NavItem[] = [
   },
 ];
 
+/**
+ * Render the RBAC-aware unified dashboard with a collapsible sidebar and main content area.
+ *
+ * Renders navigation filtered by the current user's roles/permissions, synchronizes the active
+ * view with the `view` URL query parameter, and redirects to the `/map` route when the map view
+ * is selected. If authentication is not established, navigates to `/login`. Each main view is
+ * rendered inside an ErrorBoundary. Shows an accessible fullscreen loading indicator while auth is loading.
+ *
+ * @returns The rendered dashboard UI element.
+ */
 export default function UnifiedDashboard() {
   const { user, userProfile, loading: authLoading, signOut, isAdmin, hasRole } = useAuth();
   const navigate = useNavigate();
@@ -297,7 +307,7 @@ export default function UnifiedDashboard() {
         </Sidebar>
 
         {/* Main Content */}
-        <SidebarInset className="flex-1 overflow-auto">
+        <SidebarInset className="flex-1 min-w-0 overflow-auto">
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4" data-tour="admin-header">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
@@ -310,7 +320,7 @@ export default function UnifiedDashboard() {
             </div>
           </header>
           
-          <main className="p-6">
+          <main className="p-3 sm:p-4 md:p-6">
             {renderViewContent()}
           </main>
 

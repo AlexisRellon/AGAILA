@@ -158,7 +158,7 @@ const SystemConfig: React.FC = () => {
         )}
 
         {/* Configuration Table */}
-        <div className="border rounded-md">
+        <div className="border rounded-md overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

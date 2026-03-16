@@ -206,8 +206,8 @@ const ResetPassword: React.FC = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 px-4">
-        <Card className="w-full max-w-md p-8 space-y-6">
+      <div className="min-h-screen flex items-center justify-center bg-auth px-4">
+        <Card className="w-full max-w-md p-8 space-y-6 shadow-lg bg-white rounded-xl border border-slate-200 border-t-[3px] border-t-green-500">
           <div className="text-center space-y-4">
             <div className="flex justify-center">
               <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-100">
@@ -215,12 +215,12 @@ const ResetPassword: React.FC = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-primary">
                 Password Updated!
               </h1>
               <p className="text-sm text-muted-foreground">
                 Your password has been successfully changed. Redirecting to
-                login...
+                login…
               </p>
             </div>
           </div>
@@ -235,7 +235,7 @@ const ResetPassword: React.FC = () => {
           <div className="text-center">
             <Link
               to="/login"
-              className="text-sm text-primary hover:underline font-medium"
+              className="text-sm text-secondary hover:text-primary hover:underline font-medium transition-colors"
             >
               Go to Login now
             </Link>
@@ -246,8 +246,9 @@ const ResetPassword: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 px-4">
-      <Card className="w-full max-w-md p-8 space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-auth px-4 py-12">
+      <div className="w-full max-w-md">
+        <Card className="p-8 space-y-6 shadow-lg bg-white rounded-xl border border-slate-200 border-t-[3px] border-t-primary">
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="flex justify-center">
@@ -275,7 +276,7 @@ const ResetPassword: React.FC = () => {
               <div className="flex justify-center">
 
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-primary">
                 Forgot Password?
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -431,7 +432,7 @@ const ResetPassword: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded"
                     aria-label={
                       showPassword ? 'Hide password' : 'Show password'
                     }
@@ -468,7 +469,7 @@ const ResetPassword: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded"
                     aria-label={
                       showConfirmPassword ? 'Hide password' : 'Show password'
                     }
@@ -521,13 +522,14 @@ const ResetPassword: React.FC = () => {
         <div className="text-center">
           <Link
             to="/login"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to Login
           </Link>
         </div>
       </Card>
+      </div>
     </div>
   );
 };

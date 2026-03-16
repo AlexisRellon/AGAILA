@@ -526,7 +526,7 @@ const UserManagement: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-y-2">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -552,8 +552,8 @@ const UserManagement: React.FC = () => {
       </CardHeader>
       <CardContent>
         {/* Filters */}
-        <div className="flex gap-4 mb-4">
-          <div className="flex-1 relative">
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by email..."
@@ -563,7 +563,7 @@ const UserManagement: React.FC = () => {
             />
           </div>
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Filter by role" />
             </SelectTrigger>
             <SelectContent>
@@ -575,7 +575,7 @@ const UserManagement: React.FC = () => {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -593,7 +593,7 @@ const UserManagement: React.FC = () => {
           <TableSkeleton rows={8} columns={6} />
         ) : (
           <>
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
@@ -631,7 +631,7 @@ const UserManagement: React.FC = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between py-4">
+            <div className="flex flex-wrap items-center justify-between gap-y-2 py-4">
               <div className="text-sm text-muted-foreground">
                 Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
                 {Math.min(

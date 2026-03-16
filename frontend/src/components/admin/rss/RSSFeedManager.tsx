@@ -339,7 +339,11 @@ const initialFormData: FeedFormData = {
 
 // ============================================================================
 // MAIN COMPONENT
-// ============================================================================
+/**
+ * Render the RSS feeds management interface with list, add/edit/delete, test, and auto-processing controls.
+ *
+ * @returns A React element containing the feeds table, toolbar (filter, column visibility, auto-processing toggle and countdown, process-now, add), feed add/edit dialog, delete confirmation dialog, and pagination controls.
+ */
 
 export function RSSFeedManager() {
   // Query hooks
@@ -552,8 +556,8 @@ export function RSSFeedManager() {
   return (
     <div className="w-full space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <Input
             placeholder="Filter feeds..."
             value={
@@ -562,7 +566,7 @@ export function RSSFeedManager() {
             onChange={(event) =>
               table.getColumn('feed_name')?.setFilterValue(event.target.value)
             }
-            className="max-w-sm"
+            className="flex-1 min-w-0 sm:max-w-sm"
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -599,6 +603,7 @@ export function RSSFeedManager() {
               className="h-6 w-6 p-0"
               onClick={toggleAutoProcessing}
               title={isAutoProcessEnabled ? 'Pause auto-processing' : 'Resume auto-processing'}
+              aria-label={isAutoProcessEnabled ? 'Pause auto-processing' : 'Resume auto-processing'}
             >
               {isAutoProcessEnabled ? (
                 <Pause className="h-3.5 w-3.5 text-muted-foreground" />
@@ -642,7 +647,7 @@ export function RSSFeedManager() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

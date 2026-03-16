@@ -118,3 +118,5 @@ QUICK_TEST_GUIDE*.md
 /node_modules/
 .env-production-localdev(safe).ini
 /.env.production
+/.claude
+/fix_testcases.py

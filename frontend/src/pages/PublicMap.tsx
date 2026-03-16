@@ -143,6 +143,7 @@ const PublicMap: React.FC = () => {
   const [isLegendVisible, setIsLegendVisible] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [showSettings, setShowSettings] = useState(false);
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
   
   // Accessibility: Live region announcements
   const [announcement, setAnnouncement] = useState<string>('');
@@ -208,6 +209,13 @@ const PublicMap: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [fetchHazards]);
+
+  // Close mobile controls panel whenever the sidebar opens so they don't overlap
+  useEffect(() => {
+    if (isSidebarOpen) {
+      setIsMobileControlsOpen(false);
+    }
+  }, [isSidebarOpen]);
 
   // Default map center: Manila, Philippines
   const philippinesCenter: [number, number] = [14.5995, 120.9842];
@@ -658,10 +666,30 @@ const PublicMap: React.FC = () => {
           role="application"
           aria-label="Interactive hazard map of the Philippines"
         >
+          {/* Mobile Controls Toggle Button — visible only on small screens when sidebar is closed */}
+          {!isSidebarOpen && (
+            <button
+              className="sm:hidden absolute top-4 right-4 z-[1001] p-2.5 bg-white/95 backdrop-blur-sm shadow-lg rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0a2a4d]"
+              onClick={() => setIsMobileControlsOpen(prev => !prev)}
+              aria-label={isMobileControlsOpen ? 'Hide map controls' : 'Show map controls'}
+              aria-expanded={isMobileControlsOpen}
+              aria-controls="mobile-controls-panel"
+              data-map-control="true"
+            >
+              {isMobileControlsOpen
+                ? <X className="w-5 h-5 text-gray-700" aria-hidden="true" />
+                : <Layers className="w-5 h-5 text-gray-700" aria-hidden="true" />
+              }
+            </button>
+          )}
+
           {/* Unified Floating Controls Panel - Top Right */}
-          <Card 
-            className={`absolute top-4 sm:top-6 right-4 sm:right-6 z-[1000] bg-white/95 backdrop-blur-sm shadow-lg border border-gray-200 w-[280px] sm:w-[300px] transition-all duration-300 motion-reduce:transition-none ${
-              isSidebarOpen ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'
+          <Card
+            id="mobile-controls-panel"
+            className={`absolute right-4 sm:right-6 z-[1000] bg-white/95 backdrop-blur-sm shadow-lg border border-gray-200 w-[280px] sm:w-[300px] max-h-[75vh] sm:max-h-none overflow-y-auto sm:overflow-visible transition-all duration-300 motion-reduce:transition-none ${
+              isMobileControlsOpen && !isSidebarOpen ? 'top-[3.75rem] block' : 'top-4 sm:top-6 hidden sm:block'
+            } ${
+              isSidebarOpen ? 'sm:opacity-0 sm:pointer-events-none md:opacity-100 md:pointer-events-auto' : ''
             }`}
             data-map-control="true"
             role="region"

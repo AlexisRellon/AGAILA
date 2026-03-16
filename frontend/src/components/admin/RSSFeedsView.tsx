@@ -15,6 +15,13 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { RSSFeedManager, RSSProcessingLogs, RSSStatistics, RSSArticlesManager } from './rss';
 
+/**
+ * Render the RSS Feeds View — a tabbed admin interface for managing RSS feeds, viewing collected articles, inspecting processing logs, and viewing statistics.
+ *
+ * The interface includes a header and four tabs (Feed Manager, Articles, Processing Logs, Statistics). The default active tab is "feeds".
+ *
+ * @returns The React element containing the RSS Feed Management header and the tabbed interface with corresponding tab contents.
+ */
 export default function RSSFeedsView() {
   return (
     <div className="flex flex-col gap-6">
@@ -28,7 +35,7 @@ export default function RSSFeedsView() {
 
       {/* Tabs */}
       <Tabs defaultValue="feeds" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[520px]">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-[520px] !h-auto" aria-label="RSS feed management tabs">
           <TabsTrigger value="feeds">Feed Manager</TabsTrigger>
           <TabsTrigger value="articles">Articles</TabsTrigger>
           <TabsTrigger value="logs">Processing Logs</TabsTrigger>

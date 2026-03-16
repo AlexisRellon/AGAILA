@@ -7,8 +7,9 @@
 
 import React, { useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Search, CheckCircle, Clock, XCircle, AlertTriangle, MapPin, Calendar, FileText } from 'lucide-react';
+import { Search, CheckCircle, Clock, XCircle, AlertTriangle, MapPin, Calendar, FileText, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { HazardIcon, getHazardIcon } from '../constants/hazard-icons';
@@ -25,6 +26,13 @@ interface ReportStatus {
   notes?: string;
 }
 
+/**
+ * Render the report-tracking UI allowing a user to enter a tracking ID and view the status and details of a submitted hazard report.
+ *
+ * Displays a search form for a tracking ID, shows loading and error states, and conditionally renders a detailed report card (status badge, metadata, description, verification and notes, and action links) when a report is found. When no report is present, shows help guidance.
+ *
+ * @returns A React element containing the tracking form, conditional report details, and help content
+ */
 export function ReportTracking() {
   const [searchParams] = useSearchParams();
   const initialId = searchParams.get('id') || '';
@@ -122,11 +130,20 @@ export function ReportTracking() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
+        {/* Back Navigation */}
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to Home
+        </Link>
+
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             Track Your Report
           </h1>
           <p className="text-lg text-gray-600">
@@ -141,21 +158,21 @@ export function ReportTracking() {
               <label htmlFor="tracking-id" className="block text-sm font-medium text-gray-700 mb-2">
                 Tracking ID
               </label>
-              <div className="flex gap-3 items-center">
-                <input
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <Input
                   id="tracking-id"
                   type="text"
                   value={trackingId}
                   onChange={(e) => setTrackingId(e.target.value.toUpperCase())}
                   placeholder="CR20241102ABCD1234"
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-mono text-lg"
+                  className="flex-1 font-mono text-base h-12"
                   disabled={loading}
                 />
                 <Button
                   type="submit"
                   disabled={loading || !trackingId.trim()}
                   size="lg"
-                  className="px-8"
+                  className="w-full sm:w-auto px-8"
                 >
                   {loading ? (
                     <>
@@ -185,9 +202,9 @@ export function ReportTracking() {
         {report && (
           <Card className="p-8 shadow-xl animate-fade-in">
             {/* Status Badge */}
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between items-start gap-3 mb-6">
               {getStatusBadge(report.status)}
-              <div className="text-right">
+              <div className="text-left sm:text-right">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tracking ID</p>
                 <code className="text-sm font-mono font-semibold text-gray-900">{report.tracking_id}</code>
               </div>

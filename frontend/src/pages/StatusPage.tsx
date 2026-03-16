@@ -8,12 +8,14 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
-import { AlertCircle, CheckCircle2, AlertTriangle, Wrench, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, AlertTriangle, Wrench, RefreshCw, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { landingAssets } from '../constants/landingAssets';
 
 interface ServiceStatus {
   name: string;
@@ -140,22 +142,39 @@ const StatusPage: React.FC = () => {
   const overallConfig = data ? getStatusConfig(data.overall_status) : null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#F0F4F8]">
+      {/* ── Top Navigation ── */}
+      <nav className="sticky top-0 z-50 bg-[#F0F4F8] border-b border-slate-200 shadow-sm">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl flex items-center justify-between h-14">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={landingAssets.logo.gaia} alt="GAIA" className="h-8 w-auto" />
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-[#0A2A4D] transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Home
+          </Link>
+        </div>
+      </nav>
+
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight mb-2">System Status</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-1 text-[#0A2A4D]">System Status</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
                 Real-time operational status of all core system services and external data integrations
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setAutoRefresh(!autoRefresh)}
+                className="text-xs sm:text-sm"
               >
                 Auto-refresh: {autoRefresh ? 'ON' : 'OFF'}
               </Button>
@@ -165,8 +184,8 @@ const StatusPage: React.FC = () => {
                 onClick={() => refetch()}
                 disabled={isLoading}
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
           </div>
@@ -175,11 +194,11 @@ const StatusPage: React.FC = () => {
           {overallConfig && (
             <Card className={`${overallConfig.bgColor} ${overallConfig.borderColor} border-2`}>
               <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <overallConfig.icon className={`h-8 w-8 ${overallConfig.textColor}`} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg">Overall System Status:</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="font-semibold text-base sm:text-lg">Overall System Status:</span>
                       <Badge variant="outline" className={overallConfig.textColor}>
                         {overallConfig.label}
                       </Badge>
@@ -189,9 +208,14 @@ const StatusPage: React.FC = () => {
                         Uptime: {formatUptime(data.uptime_seconds)}
                       </p>
                     )}
+                    {data && data.timestamp && (
+                      <p className="text-xs text-muted-foreground sm:hidden mt-1">
+                        Last updated: {formatLastChecked(data.timestamp)}
+                      </p>
+                    )}
                   </div>
                   {data && data.timestamp && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="hidden sm:block text-sm text-muted-foreground">
                       Last updated: {formatLastChecked(data.timestamp)}
                     </p>
                   )}
@@ -287,7 +311,7 @@ const StatusPage: React.FC = () => {
           <p>
             Status page automatically refreshes every {refreshInterval / 1000} seconds.
             {' '}
-            <a href="/" className="text-primary hover:underline">Return to home</a>
+            <Link to="/" className="text-[#005A9C] hover:text-[#0A2A4D] hover:underline transition-colors">Return to home</Link>
           </p>
         </div>
       </div>

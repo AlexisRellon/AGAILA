@@ -94,12 +94,44 @@ function exportToCSV(data: ActivityLog[]) {
   toast.success(`Exported ${data.length} logs`);
 }
 
+interface PaginationControlsProps {
+  table: ReturnType<typeof useReactTable<ActivityLog>>;
+  totalLogs: number;
+}
+
+/** Reusable pagination controls for top and bottom of the table */
+function PaginationControls({ table, totalLogs }: PaginationControlsProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-y-2">
+      <div className="text-sm text-muted-foreground">
+        Showing {table.getRowModel().rows.length} of {totalLogs} logs
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          Previous
+        </Button>
+        <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
+        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Activity Monitor UI showing a searchable, sortable, and paginated table of recent user activity with export and detail drill-down.
+ *
+ * The table auto-refreshes every 30 seconds, supports column filtering and sorting, allows exporting visible logs to CSV, and opens a details dialog for individual log entries.
+ *
+ * @returns The rendered Activity Monitor React element
+ */
 export default function ActivityMonitor() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [detailsDialog, setDetailsDialog] = useState<{ open: boolean; log: ActivityLog | null }>({ open: false, log: null });
 
-  const { data: logs = [], isLoading, refetch, isRefetching } = useQuery({
+  const { data: logs = [], isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['admin', 'activity'],
     queryFn: fetchActivityLogs,
     refetchInterval: 30000,
@@ -167,7 +199,7 @@ export default function ActivityMonitor() {
     {
       id: 'actions',
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" onClick={() => setDetailsDialog({ open: true, log: row.original })}>
+        <Button variant="ghost" size="sm" aria-label="View details" onClick={() => setDetailsDialog({ open: true, log: row.original })}>
           <Eye className="h-4 w-4" />
         </Button>
       ),
@@ -190,13 +222,13 @@ export default function ActivityMonitor() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-y-2">
           <div>
             <CardTitle>Activity Monitor</CardTitle>
             <CardDescription>Real-time user actions (auto-refreshes every 30s)</CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching} aria-label="Refresh">
               <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             </Button>
             <Button variant="outline" size="sm" onClick={() => exportToCSV(logs)} disabled={logs.length === 0}>
@@ -206,7 +238,7 @@ export default function ActivityMonitor() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <Input
             placeholder="Filter by user..."
             value={(table.getColumn('user_email')?.getFilterValue() as string) ?? ''}
@@ -221,22 +253,9 @@ export default function ActivityMonitor() {
           />
         </div>
         {/* Controls */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {table.getRowModel().rows.length} of {logs.length} logs
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-              Previous
-            </Button>
-            <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
-            <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <PaginationControls table={table} totalLogs={logs.length} />
 
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -252,6 +271,8 @@ export default function ActivityMonitor() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={columns.length} className="h-24 text-center">Loading...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={columns.length} className="h-24 text-center text-destructive">Failed to load activity logs: {error?.message}</TableCell></TableRow>
               ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id}>
@@ -267,20 +288,7 @@ export default function ActivityMonitor() {
           </Table>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {table.getRowModel().rows.length} of {logs.length} logs
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-              Previous
-            </Button>
-            <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
-            <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <PaginationControls table={table} totalLogs={logs.length} />
       </CardContent>
 
       <Dialog open={detailsDialog.open} onOpenChange={(open) => setDetailsDialog({ open, log: null })}>
@@ -291,14 +299,14 @@ export default function ActivityMonitor() {
           </DialogHeader>
           {detailsDialog.log && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><p className="text-sm font-medium text-muted-foreground">User</p><p className="text-sm">{detailsDialog.log.user_email}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Role</p><p className="text-sm">{detailsDialog.log.user_role}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Action</p><Badge variant="outline" className={`border ${getActionBadgeStyle(detailsDialog.log.action)}`}>{detailsDialog.log.action}</Badge></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Timestamp</p><p className="text-sm">{format(parseISO(detailsDialog.log.timestamp), 'PPpp')}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Resource</p><p className="text-sm">{detailsDialog.log.resource_type}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Resource ID</p><p className="text-sm font-mono">{detailsDialog.log.resource_id || 'N/A'}</p></div>
-                <div className="col-span-2"><p className="text-sm font-medium text-muted-foreground">IP Address</p><p className="text-sm font-mono">{detailsDialog.log.ip_address || 'N/A'}</p></div>
+                <div className="sm:col-span-2"><p className="text-sm font-medium text-muted-foreground">IP Address</p><p className="text-sm font-mono">{detailsDialog.log.ip_address || 'N/A'}</p></div>
               </div>
               {detailsDialog.log.details && Object.keys(detailsDialog.log.details).length > 0 && (
                 <div>

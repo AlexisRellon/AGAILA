@@ -14,10 +14,10 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 // import { Turnstile } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
 // import type { TurnstileInstance } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
-import { AlertCircle, Send, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, Send, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { ALL_HAZARD_TYPES } from '../hooks/useHazardFilters';
 import { HAZARD_ICON_REGISTRY, HazardIcon } from '../constants/hazard-icons';
 import ImageUpload from '../components/reports/ImageUpload';
@@ -333,8 +333,17 @@ const CitizenReportForm: React.FC = () => {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F0F4F8] py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
+        {/* Back Navigation */}
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to Home
+        </Link>
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">

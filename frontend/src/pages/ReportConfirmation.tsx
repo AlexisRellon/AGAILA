@@ -12,6 +12,15 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
+/**
+ * Render the report submission confirmation view.
+ *
+ * Displays a thank-you page with the report's tracking ID, copy-to-clipboard action, next-step guidance,
+ * and navigation actions. If no `trackingId` is present in route parameters, renders an invalid confirmation
+ * message with a link to submit a new report.
+ *
+ * @returns The confirmation page JSX; if `trackingId` is missing, a fallback invalid-page JSX prompting report submission.
+ */
 export function ReportConfirmation() {
   const { trackingId } = useParams<{ trackingId: string }>();
   const navigate = useNavigate();
@@ -27,7 +36,7 @@ export function ReportConfirmation() {
 
   if (!trackingId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="max-w-md w-full p-8 text-center">
           <p className="text-red-600 font-semibold">Invalid confirmation page</p>
           <Link to="/report" className="text-blue-600 hover:text-blue-700 underline mt-4 block">
@@ -39,7 +48,7 @@ export function ReportConfirmation() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         {/* Success Icon */}
         <div className="flex justify-center mb-8 animate-bounce-slow">
@@ -50,10 +59,10 @@ export function ReportConfirmation() {
         </div>
 
         {/* Main Card */}
-        <Card className="p-8 md:p-12 shadow-xl bg-white">
+        <Card className="p-5 sm:p-8 md:p-12 shadow-xl bg-white">
           {/* Thank You Message */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               Thank You for Your Report!
             </h1>
             <p className="text-lg text-gray-600 mb-2">
@@ -79,8 +88,8 @@ export function ReportConfirmation() {
             </div>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 bg-white rounded-lg border-2 border-gray-300 px-4 py-3">
-                <code className="text-xl md:text-2xl font-mono font-bold text-gray-900 tracking-wider">
+              <div className="flex-1 min-w-0 overflow-hidden bg-white rounded-lg border-2 border-gray-300 px-4 py-3">
+                <code className="text-sm sm:text-lg md:text-xl font-mono font-bold text-gray-900 tracking-wider break-all">
                   {trackingId}
                 </code>
               </div>
