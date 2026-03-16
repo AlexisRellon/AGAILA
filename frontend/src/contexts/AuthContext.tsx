@@ -18,6 +18,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryClient';
 import { supabase } from '../lib/supabase';
 import {
   useCurrentUser,
@@ -54,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const signOutRef = useRef<() => Promise<void>>(async () => {});
   
   // Use React Query hooks for data fetching
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -83,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user) {
       inactivityTimerRef.current = setTimeout(async () => {
-        await signOut();
+        await signOutRef.current();
         alert('You have been logged out due to inactivity.');
       }, INACTIVITY_TIMEOUT);
     }
@@ -97,7 +99,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         if (!mounted) return;
         
-        console.log('[AuthContext] Auth state change:', event);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[AuthContext] Auth state change:', event);
+        }
         
         setUser(session?.user ?? null);
         
@@ -105,7 +109,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_OUT') {
           queryClient.clear();
         } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          queryClient.invalidateQueries({ queryKey: ['auth'] });
+          // Seed the user directly from the session Supabase already provides
+          // in the event payload. Calling invalidateQueries here would mark
+          // ['auth','user'] and ['auth','profile',id] as stale and trigger a
+          // redundant supabase.auth.getUser() round-trip + user_profiles fetch
+          // on every tab-focus / token-renewal.
+          if (session?.user) {
+            queryClient.setQueryData(queryKeys.auth.currentUser(), session.user);
+          }
         }
         
         if (mounted) {
@@ -158,12 +169,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     await signOutMutation.mutateAsync();
   };
+  signOutRef.current = signOut;
 
   // Refresh profile by invalidating cache
   const refreshProfile = useCallback(async () => {
     if (user) {
-      console.log('[AuthContext] Refreshing profile');
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'profile', user.id] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.profile(user.id) });
     }
   }, [user, queryClient]);
 
