@@ -100,9 +100,6 @@ export const useBoundaryData = (locationName: string | null, enabled: boolean = 
     fetchBoundaryData();
   }, [locationName, enabled]);
 
-  // // Memoize the data to prevent re-parsing on re-renders
-  // const memoizedData = useMemo(() => data, [data]);
-
   return {
     data,
     loading,
