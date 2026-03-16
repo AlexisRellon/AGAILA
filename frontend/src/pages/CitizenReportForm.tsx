@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { useNavigate, Link } from 'react-router-dom';
 // import { Turnstile } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
 // import type { TurnstileInstance } from '@marsidev/react-turnstile'; // TEMPORARILY DISABLED
@@ -21,10 +22,13 @@ import { AlertCircle, Send, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { ALL_HAZARD_TYPES } from '../hooks/useHazardFilters';
 import { HAZARD_ICON_REGISTRY, HazardIcon } from '../constants/hazard-icons';
 import ImageUpload from '../components/reports/ImageUpload';
-import LocationPicker from '../components/reports/LocationPicker';
+// LocationPicker wraps Leaflet (~150KB+). Lazy-load it so it's excluded from
+// the initial CitizenReportForm chunk and only fetched when the form renders.
+const LocationPicker = React.lazy(() => import('../components/reports/LocationPicker'));
 // import { supabase } from '../lib/supabase'; // TEMPORARILY DISABLED - backend handles image upload
 import { API_BASE_URL } from '../lib/api';
 import { isValidPhilippinePhoneNumber } from '../utils/phoneValidation';
+import { z } from 'zod';
 
 /** Must match backend SUBMISSION_COOLDOWN_SECONDS. Cooldown starts on successful submit. */
 const SUBMISSION_COOLDOWN_SECONDS = 300;
@@ -59,6 +63,52 @@ interface FormErrors {
   captcha?: string;
   submit?: string;
 }
+
+// ============================================================================
+// VALIDATION SCHEMA
+// ============================================================================
+
+const descriptionMax = 1000;
+const nameMax = 100;
+
+/**
+ * Zod schema that mirrors the FormData interface.
+ * Validates all user-facing fields; optional/internal fields pass through.
+ */
+const CitizenReportSchema = z.object({
+  hazardType: z.string()
+    .min(1, 'Please select a hazard type')
+    .refine(val => ALL_HAZARD_TYPES.includes(val), 'Invalid hazard type selected'),
+
+  // latitude and longitude are required — must be a number (not undefined).
+  // Use optional() so Zod accepts the field being present-but-undefined, then
+  // the refine() rejects the undefined case with the correct user-facing message.
+  latitude: z.number().optional().refine(
+    (val): val is number => typeof val === 'number',
+    'Please select the hazard location on the map (click the map or use "Use My Current Location")'
+  ),
+  longitude: z.number().optional().refine(
+    (val): val is number => typeof val === 'number',
+    'Please select the hazard location on the map (click the map or use "Use My Current Location")'
+  ),
+
+  description: z.string()
+    .min(1, 'Description is required')
+    .min(20, 'Description must be at least 20 characters')
+    .max(descriptionMax, `Description must be ${descriptionMax} characters or less`),
+
+  name: z.string()
+    .min(1, 'Name is required')
+    .max(nameMax, `Name must be ${nameMax} characters or less`)
+    .min(2, 'Name must be at least 2 characters'),
+
+  contactNumber: z.string()
+    .min(1, 'Contact number is required')
+    .refine(
+      isValidPhilippinePhoneNumber,
+      'Please enter a valid Philippine phone number (e.g., 09123456789, +63 912 345 6789)'
+    ),
+});
 
 // ============================================================================
 // MAIN COMPONENT
@@ -105,8 +155,6 @@ const CitizenReportForm: React.FC = () => {
 
   // Character counts
   const descriptionLength = formData.description.length;
-  const descriptionMax = 1000;
-  const nameMax = 100;
 
   // Live countdown when rate-limited (updates every second)
   useEffect(() => {
@@ -145,47 +193,32 @@ const CitizenReportForm: React.FC = () => {
   // ============================================================================
 
   const validateForm = (): boolean => {
+    const result = CitizenReportSchema.safeParse(formData);
+    if (result.success) {
+      setErrors({});
+      return true;
+    }
+
+    // Map the first Zod issue per field path into the FormErrors shape.
+    // latitude and longitude both funnel into the single `location` error key.
     const newErrors: FormErrors = {};
-
-    // Hazard type validation
-    if (!formData.hazardType) {
-      newErrors.hazardType = 'Please select a hazard type';
-    } else if (!ALL_HAZARD_TYPES.includes(formData.hazardType)) {
-      newErrors.hazardType = 'Invalid hazard type selected';
-    }
-
-    // Map location validation (required - pin on map or use GPS)
-    if (formData.latitude == null || formData.longitude == null) {
-      newErrors.location = 'Please select the hazard location on the map (click the map or use "Use My Current Location")';
-    }
-
-    // Description validation
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
-    } else if (formData.description.length < 20) {
-      newErrors.description = 'Description must be at least 20 characters';
-    } else if (formData.description.length > descriptionMax) {
-      newErrors.description = `Description must be ${descriptionMax} characters or less`;
-    }
-
-    // Name validation
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (formData.name.length > nameMax) {
-      newErrors.name = `Name must be ${nameMax} characters or less`;
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Name must be at least 2 characters';
-    }
-
-    // Contact number validation
-    if (!formData.contactNumber.trim()) {
-      newErrors.contactNumber = 'Contact number is required';
-    } else if (!isValidPhilippinePhoneNumber(formData.contactNumber)) {
-      newErrors.contactNumber = 'Please enter a valid Philippine phone number (e.g., 09123456789, +63 912 345 6789)';
+    for (const issue of result.error.issues) {
+      const field = issue.path[0];
+      if ((field === 'latitude' || field === 'longitude') && !newErrors.location) {
+        newErrors.location = issue.message;
+      } else if (field === 'hazardType' && !newErrors.hazardType) {
+        newErrors.hazardType = issue.message;
+      } else if (field === 'description' && !newErrors.description) {
+        newErrors.description = issue.message;
+      } else if (field === 'name' && !newErrors.name) {
+        newErrors.name = issue.message;
+      } else if (field === 'contactNumber' && !newErrors.contactNumber) {
+        newErrors.contactNumber = issue.message;
+      }
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return false;
   };
 
   // ============================================================================
@@ -246,13 +279,24 @@ const CitizenReportForm: React.FC = () => {
     try {
       // Backend handles image upload to Supabase Storage
       // Submit form to backend using FormData (backend expects multipart/form-data)
+
+      // Guard (TypeScript can't infer validation guarantees these exist)
+      if (formData.latitude == null || formData.longitude == null) {
+        setErrors(prev => ({ ...prev, location: 'Location is required' }));
+        setIsSubmitting(false);
+        return;
+      }
+
+      const sanitizedName = DOMPurify.sanitize(formData.name.trim());
+      const sanitizedDescription = DOMPurify.sanitize(formData.description.trim());
+
       const formDataPayload = new FormData();
       formDataPayload.append('hazard_type', formData.hazardType);
-      formDataPayload.append('description', formData.description);
-      formDataPayload.append('name', formData.name.trim());
+      formDataPayload.append('description', sanitizedDescription);
+      formDataPayload.append('name', sanitizedName);
       formDataPayload.append('contact_number', formData.contactNumber.trim());
-      formDataPayload.append('latitude', formData.latitude!.toString());
-      formDataPayload.append('longitude', formData.longitude!.toString());
+      formDataPayload.append('latitude', formData.latitude.toString());
+      formDataPayload.append('longitude', formData.longitude.toString());
       
       // CAPTCHA token - temporarily disabled, backend accepts null
       // if (turnstileToken) {
@@ -315,7 +359,7 @@ const CitizenReportForm: React.FC = () => {
       });
 
     } catch (error) {
-      console.error('Submission error:', error);
+      console.error('Submission failed:', error);
       // // Reset Turnstile on error for retry - TEMPORARILY DISABLED
       // turnstileRef.current?.reset();
       // setTurnstileToken(null);
@@ -531,12 +575,18 @@ const CitizenReportForm: React.FC = () => {
                 </p>
               )}
               <div className={`border rounded-lg overflow-hidden ${errors.location ? 'ring-2 ring-red-200' : ''}`}>
-                <LocationPicker
-                  initialLat={formData.latitude}
-                  initialLng={formData.longitude}
-                  onLocationSelect={handleLocationSelect}
-                  autoLocateOnMount
-                />
+                <React.Suspense fallback={
+                  <div className="h-[300px] flex items-center justify-center bg-slate-50 rounded-lg">
+                    <div className="w-6 h-6 rounded-full border-3 border-[#0A2A4D] border-t-transparent animate-spin" />
+                  </div>
+                }>
+                  <LocationPicker
+                    initialLat={formData.latitude}
+                    initialLng={formData.longitude}
+                    onLocationSelect={handleLocationSelect}
+                    autoLocateOnMount
+                  />
+                </React.Suspense>
               </div>
             </div>
 
@@ -613,8 +663,9 @@ const CitizenReportForm: React.FC = () => {
             {/* Privacy Notice */}
             <div className="pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500 text-center">
-                Your report will be reviewed by local authorities. No personal information is collected.
-                By submitting, you agree to our{' '}
+                Your report will be reviewed by local authorities. This form collects personal
+                information (name and contact number) solely for follow-up purposes by the
+                responding authorities. Your data is handled in accordance with our{' '}
                 <a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a>.
               </p>
             </div>
