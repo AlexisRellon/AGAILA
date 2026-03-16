@@ -94,6 +94,26 @@ function exportToCSV(data: ActivityLog[]) {
   toast.success(`Exported ${data.length} logs`);
 }
 
+/** Reusable pagination controls for top and bottom of the table */
+function PaginationControls({ table, totalLogs }: { table: ReturnType<typeof useReactTable<ActivityLog>>; totalLogs: number }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-y-2">
+      <div className="text-sm text-muted-foreground">
+        Showing {table.getRowModel().rows.length} of {totalLogs} logs
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          Previous
+        </Button>
+        <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
+        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Activity Monitor UI showing a searchable, sortable, and paginated table of recent user activity with export and detail drill-down.
  *
@@ -174,7 +194,7 @@ export default function ActivityMonitor() {
     {
       id: 'actions',
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" onClick={() => setDetailsDialog({ open: true, log: row.original })}>
+        <Button variant="ghost" size="sm" aria-label="View details" onClick={() => setDetailsDialog({ open: true, log: row.original })}>
           <Eye className="h-4 w-4" />
         </Button>
       ),
@@ -228,20 +248,7 @@ export default function ActivityMonitor() {
           />
         </div>
         {/* Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-y-2">
-          <div className="text-sm text-muted-foreground">
-            Showing {table.getRowModel().rows.length} of {logs.length} logs
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-              Previous
-            </Button>
-            <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
-            <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <PaginationControls table={table} totalLogs={logs.length} />
 
         <div className="rounded-md border overflow-x-auto">
           <Table>
@@ -276,20 +283,7 @@ export default function ActivityMonitor() {
           </Table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-y-2">
-          <div className="text-sm text-muted-foreground">
-            Showing {table.getRowModel().rows.length} of {logs.length} logs
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-              Previous
-            </Button>
-            <div className="text-sm">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</div>
-            <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              Next
-            </Button>
-          </div>
-        </div>
+        <PaginationControls table={table} totalLogs={logs.length} />
       </CardContent>
 
       <Dialog open={detailsDialog.open} onOpenChange={(open) => setDetailsDialog({ open, log: null })}>

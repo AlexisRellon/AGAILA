@@ -33,12 +33,12 @@ export const SocialProofSection: React.FC = () => {
 
       <div className="relative z-10 box-border flex flex-col gap-10 items-center justify-center px-4 sm:px-6 lg:px-16 py-16 sm:py-20 w-full max-w-screen-xl mx-auto">
 
-        <div className="box-border flex flex-col gap-3 items-center justify-center px-[20px] py-0 text-[#f0f4f8] text-center">
+        <div className="box-border flex flex-col gap-3 items-center justify-center px-[20px] py-0 text-primary-foreground text-center">
           <h2 className="flex flex-col font-lato font-extrabold justify-center text-[26px] sm:text-[32px] md:text-[38px] leading-[1.2]">
             A Tool Built for Responders
           </h2>
           <p className="flex flex-col font-lato justify-center max-w-[680px] text-[14px] sm:text-[16px] leading-[26px] text-blue-200">
-            AGAILA is designed to meet the critical needs of Local Government Units (LGUs) and Disaster Risk Reduction and Management Offices (DRRMOs) across the Philippines.
+            GAIA is designed to meet the critical needs of Local Government Units (LGUs) and Disaster Risk Reduction and Management Offices (DRRMOs) across the Philippines.
           </p>
         </div>
 

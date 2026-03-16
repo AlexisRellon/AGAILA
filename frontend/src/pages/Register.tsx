@@ -92,7 +92,7 @@ export default function Register() {
     <div className="min-h-screen flex">
       {/* ── Brand Panel (desktop left column) ── */}
       <div className="hidden lg:flex lg:w-[420px] xl:w-[460px] flex-shrink-0 auth-brand-panel flex-col items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[#FF7A00]" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-accent" />
 
         <div className="relative z-10 flex flex-col items-center text-center gap-8">
           <img
@@ -110,7 +110,7 @@ export default function Register() {
             </p>
           </div>
 
-          <div className="w-10 h-0.5 bg-[#FF7A00] rounded-full" />
+          <div className="w-10 h-0.5 bg-accent rounded-full" />
 
           <p className="text-[11px] font-medium text-blue-300 uppercase tracking-[0.15em]">
             Authorized Personnel Only
@@ -132,10 +132,10 @@ export default function Register() {
           </div>
 
           {/* Form Card */}
-          <Card className="p-8 space-y-6 shadow-lg bg-white rounded-xl border border-slate-200 border-t-[3px] border-t-[#0A2A4D]">
+          <Card className="p-8 space-y-6 shadow-lg bg-white rounded-xl border border-slate-200 border-t-[3px] border-t-primary">
 
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-[#0A2A4D]">
+              <h1 className="text-2xl font-bold tracking-tight text-primary">
                 Create Account
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -217,7 +217,7 @@ export default function Register() {
 
               <Button
                 type="submit"
-                className="w-full h-10 bg-[#0A2A4D] hover:bg-[#0A2A4D]/90 text-white font-medium"
+                className="w-full h-10 bg-primary hover:bg-primary/90 text-white font-medium"
                 disabled={loading}
               >
                 {loading ? (
@@ -235,11 +235,11 @@ export default function Register() {
             <div className="pt-2 border-t border-slate-100 space-y-3 text-center">
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <Link to="/login" className="text-[#005A9C] hover:text-[#0A2A4D] hover:underline font-medium transition-colors">
+                <Link to="/login" className="text-secondary hover:text-primary hover:underline font-medium transition-colors">
                   Log In
                 </Link>
               </p>
-              <Link to="/" className="inline-block text-sm text-muted-foreground hover:text-[#0A2A4D] transition-colors">
+              <Link to="/" className="inline-block text-sm text-muted-foreground hover:text-primary transition-colors">
                 ← Back to Home
               </Link>
             </div>
