@@ -1,7 +1,10 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { landingAssets } from "../../constants/landingAssets";
 
 export const HeroSection: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <section className="relative bg-white min-h-[70vh] md:min-h-[calc(100vh-101px)] overflow-hidden w-full flex items-center justify-center">
       {/* Full-Width Background Container - Covers entire viewport */}
@@ -13,6 +16,10 @@ export const HeroSection: React.FC = () => {
             alt=""
             aria-hidden="true"
             className="w-auto h-auto min-w-[100vw] min-h-[500px] sm:min-h-[650px] md:min-h-[750px] object-cover"
+            fetchPriority="high"
+            loading="eager"
+            width={1920}
+            height={1125}
           />
         </div>
       </div>
@@ -79,19 +86,21 @@ export const HeroSection: React.FC = () => {
           <div className="flex flex-wrap gap-[12px] sm:gap-[16px] items-center justify-center">
             <button
               type="button"
-              className="bg-[#0a2a4d] text-white hover:bg-[#0a2a4d]/90 px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors"
-              onClick={() => window.location.assign("/map")}
+              className="bg-[#0a2a4d] text-white hover:bg-[#0a2a4d]/90 px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0a2a4d]"
+              onClick={() => navigate("/map")}
+              aria-label="View Live Hazard Map"
             >
               View Live Hazard Map
             </button>
             <button
               type="button"
-              className="border border-[#005a9c] border-solid text-[#005a9c] hover:bg-[#005a9c] hover:text-white px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors"
+              className="border border-[#005a9c] border-solid text-[#005a9c] hover:bg-[#005a9c] hover:text-white px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005a9c]"
               onClick={() => {
                 document
                   .getElementById("how-it-works-section")
                   ?.scrollIntoView({ behavior: "smooth" });
               }}
+              aria-label="How It Works"
             >
               How It Works
             </button>
@@ -110,7 +119,7 @@ export const HeroSection: React.FC = () => {
             src={landingAssets.hero.showcaseImage}
             alt="Showcase of GAIA's live hazard map with real-time data filtering and AI classification features."
             className="w-full h-full rounded-[calc(24px-0.5rem)] sm:rounded-[calc(32px-0.75rem)]"
-
+            loading="eager"
           />
         </div>
       </div>

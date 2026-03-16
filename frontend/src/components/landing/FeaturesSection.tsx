@@ -1,8 +1,16 @@
 import React from 'react';
 import { landingAssets } from '../../constants/landingAssets';
 
+interface Feature {
+  title: string;
+  description: string;
+  image: string;
+  fit: 'cover' | 'scale-down';
+  backgroundColor: string;
+}
+
 export const FeaturesSection: React.FC = () => {
-  const features = [
+  const features: Feature[] = [
     {
       title: 'AI-Driven Classification',
       description: 'Utilizes Zero-Shot Classification to instantly understand and categorize environmental hazards from unstructured RSS feeds.',
@@ -33,7 +41,7 @@ export const FeaturesSection: React.FC = () => {
     >
       <h2 
         id="features-heading"
-        className="font-lato font-extrabold text-[28px] sm:text-[32px] md:text-[36px] leading-[1.2] text-[#334155] text-center"
+        className="font-lato font-extrabold text-[28px] sm:text-[32px] md:text-[36px] leading-[1.2] text-slate-700 text-center"
       >
         The Core Components of AGAILA
       </h2>
@@ -44,11 +52,13 @@ export const FeaturesSection: React.FC = () => {
             className="flex flex-col gap-4 sm:gap-6 items-start w-full rounded-[8px]"
           >
             <div className="h-[224px] sm:h-[280px] md:h-[320px] lg:h-[350px] w-full rounded-[16px] overflow-hidden">
-              <img 
-                src={feature.image} 
+              <img
+                src={feature.image}
                 alt=""
                 aria-hidden="true"
                 className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
                 style={{
                   objectPosition: 'left',
                   objectFit: feature.fit,
@@ -60,7 +70,7 @@ export const FeaturesSection: React.FC = () => {
               <h3 className="font-inter font-semibold text-[18px] sm:text-[20px] md:text-[22px] lg:text-[24px] leading-[1.2] tracking-[-0.48px] text-black">
                 {feature.title}
               </h3>
-              <p className="font-inter font-medium text-[14px] sm:text-[16px] md:text-[18px] leading-[1.45] tracking-[-0.09px] text-[rgba(0,0,0,0.55)]">
+              <p className="font-inter font-medium text-[14px] sm:text-[16px] md:text-[18px] leading-[1.45] tracking-[-0.09px] text-black/55">
                 {feature.description}
               </p>
             </div>
