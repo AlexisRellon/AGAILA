@@ -23,6 +23,7 @@ from lib.supabase_client import supabase
 from backend.python.models.classifier import classifier
 from backend.python.models.geo_ner import geo_ner
 from backend.python.pipeline.rss_processor import rss_processor, RSSProcessor
+from backend.python.middleware.redis_cache import get_or_set, generate_cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class SystemStatusResponse(BaseModel):
     timestamp: datetime
     services: List[ServiceStatusResponse]
     uptime_seconds: Optional[float] = None
+    cached_at: Optional[datetime] = None
 
 
 # Track startup time for uptime calculation
@@ -338,16 +340,19 @@ async def check_rss_feeds() -> ServiceStatusResponse:
 async def get_system_status():
     """
     Get real-time operational status of all core system services and external data integrations.
-    
+
     This endpoint is publicly accessible and provides:
     - Core services: Backend API, Supabase Database, Supabase Realtime
     - AI/ML services: Classifier, Geo-NER
     - Data processing: RSS Processor
     - External integrations: RSS Feeds
-    
+
     Returns overall system status and individual service statuses with response times.
+    Cached for 15 seconds to reduce load from frequent polling.
     """
-    try:
+    cache_key = generate_cache_key("config:system", "status")
+
+    async def fetch_status():
         # Run all checks concurrently
         checks = [
             check_supabase_database(),
@@ -357,9 +362,9 @@ async def get_system_status():
             check_rss_processor(),
             check_rss_feeds(),
         ]
-        
+
         results = await asyncio.gather(*checks, return_exceptions=True)
-        
+
         # Handle any exceptions
         services = []
         for result in results:
@@ -374,7 +379,7 @@ async def get_system_status():
                 ))
             else:
                 services.append(result)
-        
+
         # Determine overall status
         statuses = [s.status for s in services]
         if ServiceStatus.DOWN in statuses:
@@ -385,17 +390,26 @@ async def get_system_status():
             overall_status = ServiceStatus.OPERATIONAL
         else:
             overall_status = ServiceStatus.DEGRADED
-        
+
         # Calculate uptime
         uptime_seconds = (datetime.now() - _startup_time).total_seconds()
-        
+
         return SystemStatusResponse(
             overall_status=overall_status,
             timestamp=datetime.now(),
             services=services,
             uptime_seconds=round(uptime_seconds, 2)
-        )
-        
+        ).dict()
+
+    try:
+        data = await get_or_set(cache_key, fetch_status, ttl=15)
+        # Inject response-time metadata so clients can distinguish the original
+        # check time (timestamp/last_checked inside data) from when this
+        # particular response was served (cached_at).
+        if isinstance(data, dict):
+            data["cached_at"] = datetime.now().isoformat()
+        return data
+
     except Exception as e:
         logger.error(f"System status check failed: {str(e)}", exc_info=True)
         raise HTTPException(

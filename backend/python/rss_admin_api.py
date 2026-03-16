@@ -9,6 +9,7 @@ Security:
 - Rate limiting on processing endpoints
 """
 
+import asyncio
 import os
 import logging
 from datetime import datetime, timedelta
@@ -32,6 +33,14 @@ from backend.python.middleware.activity_logger import ActivityLogger
 
 # Import RBAC for admin-only access and audit logging
 from backend.python.middleware.rbac import require_admin, UserContext, log_admin_action
+
+# Import Redis caching for performance
+from backend.python.middleware.redis_cache import (
+    get_or_set,
+    generate_cache_key,
+    invalidate_pattern,
+    CACHE_TTLS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,24 +162,24 @@ async def list_rss_feeds(
 ):
     """
     List all RSS feeds with statistics.
-    
+
     Query Parameters:
     - is_active: Filter by active status (optional)
-    
+
     Returns list of RSS feeds with metadata and statistics.
     """
     try:
-        query = supabase.schema('gaia').table('rss_feeds').select('*')
-        
-        if is_active is not None:
-            query = query.eq('is_active', is_active)
-        
-        query = query.order('priority', desc=False).order('feed_name', desc=False)
-        
-        result = query.execute()
-        
-        return result.data
-        
+        cache_key = generate_cache_key("rss:feeds", "list", is_active=is_active)
+
+        async def fetch_feeds():
+            query = supabase.schema('gaia').table('rss_feeds').select('*')
+            if is_active is not None:
+                query = query.eq('is_active', is_active)
+            query = query.order('priority', desc=False).order('feed_name', desc=False)
+            return query.execute().data
+
+        return await get_or_set(cache_key, fetch_feeds, ttl=CACHE_TTLS.get("rss:feeds", 60))
+
     except Exception as e:
         logger.error(f"Error listing RSS feeds: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -225,7 +234,10 @@ async def create_rss_feed(
             )
         
         logger.info(f"Created new RSS feed: {feed.feed_name} ({feed.feed_url})")
-        
+
+        # Invalidate RSS feeds cache so the new feed is visible immediately
+        await invalidate_pattern("rss:feeds:*")
+
         # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
@@ -309,7 +321,10 @@ async def update_rss_feed(
             )
         
         logger.info(f"Updated RSS feed: {feed_id}")
-        
+
+        # Invalidate RSS feeds cache so the change is reflected immediately
+        await invalidate_pattern("rss:feeds:*")
+
         # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
@@ -385,7 +400,10 @@ async def delete_rss_feed(
             )
         
         logger.info(f"Deleted RSS feed: {feed_id}")
-        
+
+        # Invalidate RSS feeds cache so the deletion is reflected immediately
+        await invalidate_pattern("rss:feeds:*")
+
         # Log activity for audit trail (FP-04 Activity Monitor)
         try:
             await ActivityLogger.log_activity(
@@ -754,77 +772,102 @@ async def get_processing_logs(
 @limiter.limit("30/minute")
 async def get_rss_statistics(
     request: Request,
-    response: Response
+    response: Response,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Get comprehensive RSS feed statistics.
-    
+
     Returns:
     - Total feeds count
-    - Active feeds count  
+    - Active feeds count
     - Total hazards found
     - Last 24 hours performance metrics
     - Duplicate detection rate
     - Feeds with errors count
     """
     try:
-        # Get feed counts and error info
-        feeds_result = supabase.schema('gaia').table('rss_feeds').select('id, is_active, total_hazards_found, total_errors').execute()
-        
-        total_feeds = len(feeds_result.data)
-        active_feeds = len([f for f in feeds_result.data if f['is_active']])
-        feeds_with_errors = len([f for f in feeds_result.data if (f.get('total_errors') or 0) > 0])
-        
-        # Count actual hazards from hazards table (more accurate than feed stats)
-        hazards_result = supabase.schema('gaia').table('hazards') \
-            .select('id', count='exact', head=True) \
-            .eq('source_type', 'rss') \
-            .execute()
-        total_hazards_found = hazards_result.count or 0
-        
-        # Get last 24h statistics from processing logs
-        time_threshold = datetime.utcnow() - timedelta(hours=24)
-        logs_24h_result = supabase.schema('gaia').table('rss_processing_logs') \
-            .select('*') \
-            .gte('processed_at', time_threshold.isoformat()) \
-            .execute()
-        
-        logs_24h = logs_24h_result.data
-        
-        last_24h_runs = len(logs_24h)
-        last_24h_avg_processing_time = sum(log.get('processing_time_seconds', 0) or 0 for log in logs_24h) / max(last_24h_runs, 1)
-        last_24h_success_count = len([log for log in logs_24h if log.get('status') == 'success'])
-        # Return as decimal (0-1 range) - frontend multiplies by 100 for display
-        last_24h_success_rate = last_24h_success_count / max(last_24h_runs, 1)
-        
-        # Get actual hazards created in last 24h from hazards table
-        hazards_24h_result = supabase.schema('gaia').table('hazards') \
-            .select('id', count='exact', head=True) \
-            .eq('source_type', 'rss') \
-            .gte('created_at', time_threshold.isoformat()) \
-            .execute()
-        last_24h_hazards = hazards_24h_result.count or 0
-        
-        # Calculate duplicate detection rate from all logs
-        all_logs_result = supabase.schema('gaia').table('rss_processing_logs').select('items_processed, duplicates_detected').execute()
-        all_logs = all_logs_result.data
-        
-        total_processed = sum(log.get('items_processed', 0) or 0 for log in all_logs)
-        total_duplicates = sum(log.get('duplicates_detected', 0) or 0 for log in all_logs)
-        # Return as decimal (0-1 range) - frontend multiplies by 100 for display
-        duplicate_detection_rate = total_duplicates / max(total_processed, 1)
-        
-        return RSSStatisticsResponse(
-            total_feeds=total_feeds,
-            active_feeds=active_feeds,
-            total_hazards_found=total_hazards_found,
-            last_24h_hazards=last_24h_hazards,
-            last_24h_processing_time_avg=round(last_24h_avg_processing_time, 2),
-            last_24h_success_rate=round(last_24h_success_rate, 4),  # Decimal: 1.0 = 100%
-            duplicate_detection_rate=round(duplicate_detection_rate, 4),  # Decimal: 0.2225 = 22.25%
-            feeds_with_errors=feeds_with_errors
-        )
-        
+        cache_key = generate_cache_key("rss:feeds", "statistics")
+
+        async def fetch_statistics():
+            time_threshold = datetime.utcnow() - timedelta(hours=24)
+
+            # Run all independent queries concurrently instead of serially
+            (
+                feeds_result,
+                hazards_result,
+                logs_24h_result,
+                hazards_24h_result,
+                all_logs_result,
+            ) = await asyncio.gather(
+                asyncio.to_thread(
+                    lambda: supabase.schema('gaia').table('rss_feeds')
+                        .select('id, is_active, total_hazards_found, total_errors')
+                        .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: supabase.schema('gaia').table('hazards')
+                        .select('id', count='exact', head=True)
+                        .eq('source_type', 'rss')
+                        .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: supabase.schema('gaia').table('rss_processing_logs')
+                        .select('*')
+                        .gte('processed_at', time_threshold.isoformat())
+                        .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: supabase.schema('gaia').table('hazards')
+                        .select('id', count='exact', head=True)
+                        .eq('source_type', 'rss')
+                        .gte('created_at', time_threshold.isoformat())
+                        .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: supabase.schema('gaia').table('rss_processing_logs')
+                        .select('items_processed, duplicates_detected')
+                        .execute()
+                ),
+            )
+
+            total_feeds = len(feeds_result.data)
+            active_feeds = len([f for f in feeds_result.data if f['is_active']])
+            feeds_with_errors = len([f for f in feeds_result.data if (f.get('total_errors') or 0) > 0])
+
+            total_hazards_found = hazards_result.count or 0
+
+            logs_24h = logs_24h_result.data
+
+            last_24h_runs = len(logs_24h)
+            last_24h_avg_processing_time = sum(log.get('processing_time_seconds', 0) or 0 for log in logs_24h) / max(last_24h_runs, 1)
+            last_24h_success_count = len([log for log in logs_24h if log.get('status') == 'success'])
+            # Return as decimal (0-1 range) - frontend multiplies by 100 for display
+            last_24h_success_rate = last_24h_success_count / max(last_24h_runs, 1)
+
+            last_24h_hazards = hazards_24h_result.count or 0
+
+            all_logs = all_logs_result.data
+
+            total_processed = sum(log.get('items_processed', 0) or 0 for log in all_logs)
+            total_duplicates = sum(log.get('duplicates_detected', 0) or 0 for log in all_logs)
+            # Return as decimal (0-1 range) - frontend multiplies by 100 for display
+            duplicate_detection_rate = total_duplicates / max(total_processed, 1)
+
+            return {
+                "total_feeds": total_feeds,
+                "active_feeds": active_feeds,
+                "total_hazards_found": total_hazards_found,
+                "last_24h_hazards": last_24h_hazards,
+                "last_24h_processing_time_avg": round(last_24h_avg_processing_time, 2),
+                "last_24h_success_rate": round(last_24h_success_rate, 4),
+                "duplicate_detection_rate": round(duplicate_detection_rate, 4),
+                "feeds_with_errors": feeds_with_errors,
+            }
+
+        data = await get_or_set(cache_key, fetch_statistics, ttl=CACHE_TTLS.get("rss:feeds", 60))
+        return RSSStatisticsResponse(**data)
+
     except Exception as e:
         logger.error(f"Error retrieving RSS statistics: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -837,49 +880,64 @@ async def get_rss_statistics(
 @limiter.limit("30/minute")
 async def get_feed_performance(
     request: Request,
-    response: Response
+    response: Response,
+    current_user: UserContext = Depends(require_admin),
 ):
     """
     Get hazard counts per feed for charting.
-    
+
     Returns list of feeds with their actual hazard counts from the hazards table.
     """
     try:
-        # Get all feeds
-        feeds_result = supabase.schema('gaia').table('rss_feeds') \
-            .select('id, feed_name, feed_url, total_fetches') \
-            .eq('is_active', True) \
-            .execute()
-        
-        feeds = feeds_result.data
-        
-        # Get hazard counts per source (feed URL)
-        # Group hazards by source field which contains the feed URL
-        performance_data = []
-        
-        for feed in feeds:
-            # Count hazards for this specific feed URL
-            hazards_result = supabase.schema('gaia').table('hazards') \
-                .select('id', count='exact', head=True) \
-                .eq('source_type', 'rss') \
-                .eq('source', feed['feed_url']) \
-                .execute()
-            
-            hazard_count = hazards_result.count or 0
-            
-            performance_data.append({
-                'id': feed['id'],
-                'name': feed['feed_name'],
-                'feed_url': feed['feed_url'],
-                'hazards': hazard_count,
-                'fetches': feed.get('total_fetches', 0) or 0
-            })
-        
-        # Sort by hazards descending
-        performance_data.sort(key=lambda x: x['hazards'], reverse=True)
-        
-        return performance_data
-        
+        cache_key = generate_cache_key("rss:feeds", "feed-performance")
+
+        async def fetch_performance():
+            # Get all active feeds
+            feeds_result = await asyncio.to_thread(
+                lambda: supabase.schema('gaia').table('rss_feeds')
+                    .select('id, feed_name, feed_url, total_fetches')
+                    .eq('is_active', True)
+                    .execute()
+            )
+
+            feeds = feeds_result.data
+            if not feeds:
+                return []
+
+            feed_urls = [f['feed_url'] for f in feeds]
+
+            # Single aggregated query instead of one query per feed (eliminates N+1)
+            all_hazards_result = await asyncio.to_thread(
+                lambda: supabase.schema('gaia').table('hazards')
+                    .select('source')
+                    .eq('source_type', 'rss')
+                    .in_('source', feed_urls)
+                    .execute()
+            )
+
+            # Build count map in Python
+            hazard_counts: dict = {}
+            for row in (all_hazards_result.data or []):
+                src = row.get('source')
+                if src:
+                    hazard_counts[src] = hazard_counts.get(src, 0) + 1
+
+            performance_data = []
+            for feed in feeds:
+                performance_data.append({
+                    'id': feed['id'],
+                    'name': feed['feed_name'],
+                    'feed_url': feed['feed_url'],
+                    'hazards': hazard_counts.get(feed['feed_url'], 0),
+                    'fetches': feed.get('total_fetches', 0) or 0
+                })
+
+            # Sort by hazards descending
+            performance_data.sort(key=lambda x: x['hazards'], reverse=True)
+            return performance_data
+
+        return await get_or_set(cache_key, fetch_performance, ttl=CACHE_TTLS.get("rss:feeds", 60))
+
     except Exception as e:
         logger.error(f"Error retrieving feed performance: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -1129,7 +1187,10 @@ async def delete_rss_article(
             .execute()
         
         logger.info(f"Deleted RSS article: {article_id}")
-        
+
+        # Invalidate hazards cache since an article (hazard) was deleted
+        await invalidate_pattern("hazards:*")
+
         return Response(status_code=status.HTTP_204_NO_CONTENT)
         
     except HTTPException:
@@ -1185,8 +1246,11 @@ async def bulk_delete_rss_articles(
             .execute()
         
         deleted_count = len(result.data) if result.data else 0
-        
+
         logger.info(f"Bulk deleted {deleted_count} RSS articles")
+
+        # Invalidate hazards cache since articles (hazards) were deleted
+        await invalidate_pattern("hazards:*")
         
         return {
             'deleted_count': deleted_count,
@@ -1300,7 +1364,10 @@ async def update_rss_article(
             )
         
         logger.info(f"Updated RSS article {article_id}: {list(update_dict.keys())}")
-        
+
+        # Invalidate hazards cache since an article (hazard) was updated
+        await invalidate_pattern("hazards:*")
+
         return result.data[0]
         
     except HTTPException:

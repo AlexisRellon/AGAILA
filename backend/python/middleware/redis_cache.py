@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/2")  # DB 2 for caching
-CACHE_PREFIX = "gaia:cache:"
+CACHE_PREFIX = "gaia:cache"
 DEFAULT_TTL = 60  # 1 minute default
 MAX_TTL = 3600  # 1 hour max
 COMPRESSION_THRESHOLD = 1024  # Compress if > 1KB
@@ -160,7 +160,7 @@ def generate_cache_key(
     if len(key) > 200:
         # Hash long keys
         hash_suffix = hashlib.md5(key.encode()).hexdigest()[:12]
-        key = f"{CACHE_PREFIX}{prefix}:{hash_suffix}"
+        key = f"{CACHE_PREFIX}:{prefix}:{hash_suffix}"
     
     return key
 
@@ -301,7 +301,7 @@ async def invalidate_pattern(pattern: str) -> int:
     """
     try:
         redis = await get_redis()
-        full_pattern = f"{CACHE_PREFIX}{pattern}"
+        full_pattern = f"{CACHE_PREFIX}:{pattern}"
         
         # Use SCAN for production-safe key iteration
         deleted = 0
@@ -468,18 +468,18 @@ async def get_cache_stats() -> dict:
         cursor = 0
         key_count = 0
         while True:
-            cursor, keys = await redis.scan(cursor, match=f"{CACHE_PREFIX}*", count=1000)
+            cursor, keys = await redis.scan(cursor, match=f"{CACHE_PREFIX}:*", count=1000)
             key_count += len(keys)
             if cursor == 0:
                 break
-        
+
         return {
             "backend": "redis",
             "status": "healthy",
             "used_memory": info.get("used_memory_human", "unknown"),
             "used_memory_peak": info.get("used_memory_peak_human", "unknown"),
             "total_keys": key_count,
-            "prefix": CACHE_PREFIX,
+            "prefix": f"{CACHE_PREFIX}:",
             "default_ttl": DEFAULT_TTL,
             "compression_threshold": COMPRESSION_THRESHOLD,
             "checked_at": datetime.utcnow().isoformat()
@@ -509,7 +509,7 @@ async def clear_all_cache() -> int:
         deleted = 0
         
         while True:
-            cursor, keys = await redis.scan(cursor, match=f"{CACHE_PREFIX}*", count=1000)
+            cursor, keys = await redis.scan(cursor, match=f"{CACHE_PREFIX}:*", count=1000)
             if keys:
                 deleted += await redis.delete(*keys)
             if cursor == 0:
