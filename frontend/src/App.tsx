@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import './App.css';
@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { SkipLink } from './components/SkipLink';
 import { queryClient } from './lib/queryClient';
+import { storageCache } from './lib/storageCache';
 import { useRealtimeNotifications } from './hooks/useRealtimeNotifications';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 import LandingPage from './pages/LandingPage';
@@ -24,16 +25,16 @@ import StatusPage from './pages/StatusPage';
 /**
  * Component that applies document title based on route
  */
-function DocumentTitleManager() {
+const DocumentTitleManager = () => {   
   useDocumentTitle();
   return null;
-}
+};
 
 /**
  * Main App component with realtime notifications
  * Manages routing, authentication, and real-time subscriptions
  */
-function AppContent() {
+const AppContent = () => {
   // Enable realtime notifications for all users
   useRealtimeNotifications();
 
@@ -80,9 +81,9 @@ function AppContent() {
                   <p className="text-lg text-muted-foreground">
                     The page you&apos;re looking for doesn&apos;t exist yet.
                   </p>
-                  <a href="/" className="text-primary hover:underline">
+                  <Link to="/" className="text-primary hover:underline">
                     Return to Home
-                  </a>
+                  </Link>
                 </div>
               </div>
             } />
@@ -91,9 +92,17 @@ function AppContent() {
         </main>
       </Router>
   );
-}
+};
 
-function App() {
+const App = () => {
+  useEffect(() => {
+    try {
+      storageCache.clearExpired();
+    } catch(error) {
+      console.warn('Failed to clear expired cache entries:', error);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -103,6 +112,6 @@ function App() {
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
-}
+};
 
 export default App;
