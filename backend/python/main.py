@@ -62,6 +62,9 @@ from backend.python.api import realtime as realtime_api
 # Import Auth API router for auth event logging
 from backend.python.api import auth as auth_api
 
+# Import System Error Logger for global exception handling
+from backend.python.middleware.error_logger import SystemErrorLogger, ErrorSource
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -211,6 +214,67 @@ app.middleware("http")(add_rate_limit_headers)
 # Attach rate limiter (SECURITY_AUDIT.md #1)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+# ============================================================================
+# Global Exception Handler (AC-06: System Error Logging)
+# ============================================================================
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to catch and log all unhandled exceptions.
+
+    This ensures that system crashes, unhandled exceptions, and unexpected errors
+    are properly logged to the audit trail with full stack traces and context.
+
+    Module: AC-06 (System Error Logger)
+    """
+    # Extract user context if available from Authorization header
+    user_id = None
+    user_email = None
+
+    try:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            # Could parse JWT token here to extract user info
+            # For now, we'll just log it came from an authenticated request
+            user_email = "authenticated_user"
+    except Exception:
+        pass  # If we can't extract user info, just log as system
+
+    # Log the unhandled exception
+    await SystemErrorLogger.log_unhandled_exception(
+        exception=exc,
+        source=ErrorSource.BACKEND_PYTHON,
+        request=request,
+        context={
+            "endpoint": str(request.url.path) if request.url else None,
+            "method": request.method,
+            "exception_type": type(exc).__name__,
+        },
+        user_id=user_id,
+        user_email=user_email
+    )
+
+    # Return generic error to client (don't expose internal details)
+    # For HTTPException, preserve the status code and detail
+    if isinstance(exc, HTTPException):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
+
+    # For all other exceptions, return 500
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server error occurred. The error has been logged.",
+            "error_id": datetime.utcnow().isoformat(),
+            "type": "internal_server_error"
+        }
+    )
 
 # Include routers
 # app.include_router(research_router, prefix="/api/v1")  # Research API (commented out until configured)
@@ -365,18 +429,24 @@ async def classify_text(request: Request, response: Response, body: ClassifyText
     Classify text into environmental hazard categories.
     Uses model fallback hierarchy: climatebert → deberta → bart → xlm-roberta
     Rate limited: 20 requests per minute per IP
-    
+
     - **text**: Text to classify (article content, citizen report)
     - **threshold**: Minimum confidence threshold (0.0-1.0)
-    
+
     Returns classification result with hazard type and confidence score.
     """
     try:
         result = classifier.classify(body.text, threshold=body.threshold)
         return ClassifyTextResponse(**result)
-        
+
     except Exception as e:
         logger.error(f"Classification error: {str(e)}")
+        # Log model error for tracking
+        await SystemErrorLogger.log_model_error(
+            model_name="climate-classifier",
+            error=e,
+            input_data={"text_length": len(body.text), "threshold": body.threshold}
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -386,17 +456,23 @@ async def extract_locations(request: Request, response: Response, body: ExtractL
     """
     Extract Philippine locations from text using Geo-NER.
     Rate limited: 30 requests per minute per IP
-    
+
     - **text**: Text to extract locations from
-    
+
     Returns list of locations with coordinates and administrative hierarchy.
     """
     try:
         locations = geo_ner.extract_locations(body.text)
         return [LocationResponse(**loc) for loc in locations]
-        
+
     except Exception as e:
         logger.error(f"Location extraction error: {str(e)}")
+        # Log model error for tracking
+        await SystemErrorLogger.log_model_error(
+            model_name="geo-ner",
+            error=e,
+            input_data={"text_length": len(body.text)}
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
