@@ -1155,7 +1155,8 @@ async def count_rss_articles(
 async def delete_rss_article(
     request: Request,
     response: Response,
-    article_id: str
+    article_id: str,
+    current_user: UserContext = Depends(require_admin)
 ):
     """
     Delete a single RSS article.
@@ -1168,7 +1169,7 @@ async def delete_rss_article(
     try:
         # First verify the article exists and is an RSS article
         check_result = supabase.schema('gaia').table('hazards') \
-            .select('id') \
+            .select('id, title, source') \
             .eq('id', article_id) \
             .eq('source_type', 'rss') \
             .execute()
@@ -1178,6 +1179,8 @@ async def delete_rss_article(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="RSS article not found"
             )
+            
+        old_data = check_result.data[0]
         
         # Delete the article
         result = supabase.schema('gaia').table('hazards') \
@@ -1186,7 +1189,20 @@ async def delete_rss_article(
             .eq('source_type', 'rss') \
             .execute()
         
-        logger.info(f"Deleted RSS article: {article_id}")
+        logger.info(f"Deleted RSS article: {article_id} by {current_user.email}")
+        
+        # Log admin action
+        await log_admin_action(
+            user=current_user,
+            action="rss_article_deleted",
+            action_description=f"Deleted RSS article '{old_data.get('title', 'Unknown')}'",
+            resource_type="hazards",
+            resource_id=article_id,
+            old_values=old_data,
+            new_values=None,
+            request=request,
+            event_type="RSS_ARTICLE_DELETED"
+        )
 
         # Invalidate hazards cache since an article (hazard) was deleted
         await invalidate_pattern("hazards:*")
@@ -1208,7 +1224,8 @@ async def delete_rss_article(
 async def bulk_delete_rss_articles(
     request: Request,
     response: Response,
-    delete_request: BulkDeleteRequest
+    delete_request: BulkDeleteRequest,
+    current_user: UserContext = Depends(require_admin)
 ):
     """
     Bulk delete multiple RSS articles.
@@ -1224,12 +1241,13 @@ async def bulk_delete_rss_articles(
         
         # First verify all articles exist and are RSS articles
         check_result = supabase.schema('gaia').table('hazards') \
-            .select('id') \
+            .select('id, title') \
             .in_('id', ids) \
             .eq('source_type', 'rss') \
             .execute()
         
         found_ids = [item['id'] for item in check_result.data]
+        titles = [item.get('title', 'Unknown') for item in check_result.data]
         not_found_ids = [id for id in ids if id not in found_ids]
         
         if not found_ids:
@@ -1247,7 +1265,20 @@ async def bulk_delete_rss_articles(
         
         deleted_count = len(result.data) if result.data else 0
 
-        logger.info(f"Bulk deleted {deleted_count} RSS articles")
+        logger.info(f"Bulk deleted {deleted_count} RSS articles by {current_user.email}")
+        
+        # Log admin action
+        await log_admin_action(
+            user=current_user,
+            action="rss_articles_bulk_deleted",
+            action_description=f"Bulk deleted {deleted_count} RSS articles.",
+            resource_type="hazards",
+            resource_id="multiple",
+            old_values={"deleted_ids": found_ids, "deleted_titles": titles},
+            new_values=None,
+            request=request,
+            event_type="RSS_ARTICLES_BULK_DELETED"
+        )
 
         # Invalidate hazards cache since articles (hazards) were deleted
         await invalidate_pattern("hazards:*")
@@ -1283,7 +1314,8 @@ async def update_rss_article(
     request: Request,
     response: Response,
     article_id: str,
-    update_data: ArticleUpdateRequest
+    update_data: ArticleUpdateRequest,
+    current_user: UserContext = Depends(require_admin)
 ):
     """
     Update an RSS article's status, validation, or other fields.
@@ -1311,6 +1343,8 @@ async def update_rss_article(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="RSS article not found"
             )
+            
+        old_data = check_result.data[0]
         
         # Build update dict with only provided fields
         update_dict = {}
@@ -1362,13 +1396,28 @@ async def update_rss_article(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Update failed"
             )
+            
+        updated_data = result.data[0]
         
-        logger.info(f"Updated RSS article {article_id}: {list(update_dict.keys())}")
+        logger.info(f"Updated RSS article {article_id} by {current_user.email}: {list(update_dict.keys())}")
+        
+        # Log admin action
+        await log_admin_action(
+            user=current_user,
+            action="rss_article_updated",
+            action_description=f"Updated RSS article fields: {', '.join(update_dict.keys())}",
+            resource_type="hazards",
+            resource_id=article_id,
+            old_values={k: old_data.get(k) for k in update_dict.keys() if k in old_data},
+            new_values=update_dict,
+            request=request,
+            event_type="RSS_ARTICLE_UPDATED"
+        )
 
         # Invalidate hazards cache since an article (hazard) was updated
         await invalidate_pattern("hazards:*")
 
-        return result.data[0]
+        return updated_data
         
     except HTTPException:
         raise
@@ -1386,6 +1435,7 @@ async def validate_rss_article(
     request: Request,
     response: Response,
     article_id: str,
+    current_user: UserContext = Depends(require_admin),
     validation_notes: Optional[str] = None
 ):
     """
@@ -1433,9 +1483,24 @@ async def validate_rss_article(
                 detail="Validation failed"
             )
         
-        logger.info(f"Validated RSS article {article_id}")
+        updated_data = result.data[0]
         
-        return result.data[0]
+        logger.info(f"Validated RSS article {article_id} by {current_user.email}")
+        
+        # Log admin action
+        await log_admin_action(
+            user=current_user,
+            action="rss_article_validated",
+            action_description=f"Quick validated RSS article",
+            resource_type="hazards",
+            resource_id=article_id,
+            old_values={'validated': check_result.data[0].get('validated')},
+            new_values={'validated': True, 'validation_notes': validation_notes},
+            request=request,
+            event_type="RSS_ARTICLE_VALIDATED"
+        )
+        
+        return updated_data
         
     except HTTPException:
         raise

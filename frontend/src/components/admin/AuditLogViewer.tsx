@@ -301,6 +301,10 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="rss_feed_updated">RSS Feed Updated</SelectItem>
                 <SelectItem value="rss_feed_deleted">RSS Feed Deleted</SelectItem>
                 <SelectItem value="rss_processing_started">RSS Processing Started</SelectItem>
+                <SelectItem value="rss_article_validated">RSS Article Validated</SelectItem>
+                <SelectItem value="rss_article_updated">RSS Article Updated</SelectItem>
+                <SelectItem value="rss_article_deleted">RSS Article Deleted</SelectItem>
+                <SelectItem value="rss_articles_bulk_deleted">RSS Articles Bulk Deleted</SelectItem>
               </SelectContent>
             </Select>
 
