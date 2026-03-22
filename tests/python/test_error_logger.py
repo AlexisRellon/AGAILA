@@ -311,26 +311,46 @@ async def test_error_logger_integration():
 
     Run with: pytest tests/python/test_error_logger.py::test_error_logger_integration
     """
-    pytest.skip("Integration test - requires Supabase connection")
+    # pytest.skip("Integration test - requires Supabase connection")
 
-    # If running integration tests, uncomment below:
-    # test_error = ValueError("Integration test error")
-    #
-    # result = await SystemErrorLogger.log_unhandled_exception(
-    #     exception=test_error,
-    #     source=ErrorSource.BACKEND_PYTHON,
-    #     context={"test": "integration"}
-    # )
-    #
-    # assert result is True
-    #
-    # # Verify error was logged to database
-    # from backend.python.lib.supabase_client import supabase
-    # response = supabase.schema("gaia").from_("audit_logs") \
-    #     .select("*") \
-    #     .eq("error_category", "unhandled_exception") \
-    #     .limit(1) \
-    #     .execute()
-    #
-    # assert len(response.data) > 0
-    # assert response.data[0]["error_source"] == "backend_python"
+    # Integration tests are enabled; comment out to disable
+    test_error = ValueError("Integration test error")
+    
+    result = await SystemErrorLogger.log_unhandled_exception(
+        exception=test_error,
+        source=ErrorSource.BACKEND_PYTHON,
+        context={"test": "integration"}
+    )
+    
+    assert result is True
+    
+    # Verify error was logged to database
+    from backend.python.lib.supabase_client import supabase
+    response = supabase.schema("gaia").from_("audit_logs") \
+        .select("*") \
+        .eq("error_category", "unhandled_exception") \
+        .eq("context->>test", "integration") \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+    
+    assert response.data and len(response.data) > 0, "No audit log found for test context"
+    assert response.data[0]["error_source"] == "backend_python"
+    
+    # Cleanup inserted test row
+    # if response.data and response.data[0].get("id"):
+    #     supabase.schema("gaia").from_("audit_logs") \
+    #         .delete() \
+    #         .eq("id", response.data[0]["id"]) \
+    #         .execute()
+    try:
+        assert response.data and len(response.data) > 0, "No audit log found for test context"
+        assert response.data[0]["error_source"] == "backend_python"
+    finally:
+        # Cleanup inserted test row - uncomment if you want to keep test data for manual verification
+        if response.data and response.data[0].get("id"):
+            supabase.schema("gaia").from_("audit_logs") \
+                .delete() \
+                .eq("id", response.data[0]["id"]) \
+                .execute()
+        print("Integration test completed - check Supabase audit_logs for entry with context->>test = 'integration'")
