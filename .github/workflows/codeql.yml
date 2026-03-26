@@ -77,7 +77,7 @@ jobs:
           query-suite: security-and-quality
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Full history for better analysis
 
@@ -118,11 +118,14 @@ jobs:
         
         for file in "${python_files_array[@]}"; do
           echo "[CHECK] $file"
-          if python -m py_compile "$file"; then
+          # Capture both stdout and stderr to show full error details
+          if error_output=$(python -m py_compile "$file" 2>&1); then
             echo "[PASS] $file"
             ((passed++))
           else
             echo "[FAIL] SYNTAX ERROR: $file"
+            echo "Error details:"
+            echo "$error_output"
             ((failed++))
           fi
           echo "----------------------------------------"
@@ -270,10 +273,22 @@ jobs:
         echo "- Build Mode: \`${{ matrix.build-mode }}\`" >> $GITHUB_STEP_SUMMARY
         echo "- Runner: \`${{ runner.os }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        if [ "${{ steps.codeql-analyze.outcome }}" == "success" ]; then
-          echo "**Status:** :white_check_mark: Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "**Status:** :x: Analysis failed" >> $GITHUB_STEP_SUMMARY
-        fi
+        
+        # Determine status based on job outcome
+        case "${{ job.status }}" in
+          success)
+            echo "**Status:** :white_check_mark: Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+            ;;
+          failure)
+            echo "**Status:** :x: Analysis failed" >> $GITHUB_STEP_SUMMARY
+            ;;
+          cancelled)
+            echo "**Status:** :warning: Analysis cancelled" >> $GITHUB_STEP_SUMMARY
+            ;;
+          *)
+            echo "**Status:** :question: Analysis status unknown" >> $GITHUB_STEP_SUMMARY
+            ;;
+        esac
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "View detailed results in the **Security** tab under **Code scanning alerts**" >> $GITHUB_STEP_SUMMARY

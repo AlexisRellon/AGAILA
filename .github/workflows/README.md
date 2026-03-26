@@ -11,9 +11,10 @@ This directory contains GitHub Actions workflows for automated CI/CD and securit
 **Purpose**: Automated security vulnerability scanning and code quality analysis
 
 **Triggers**:
-- Push to `main` branch
-- Pull requests to `main`
+- Push to `main` and `develop` branches
+- Pull requests to `main` and `develop`
 - Weekly schedule (Sundays at 22:26 UTC)
+- Manual dispatch (`workflow_dispatch`)
 
 **Languages Analyzed**:
 - Python (backend)
