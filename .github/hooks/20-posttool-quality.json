@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "python scripts/hooks/posttool_quality_reminder.py",
+        "linux": "python3 scripts/hooks/posttool_quality_reminder.py",
+        "osx": "python3 scripts/hooks/posttool_quality_reminder.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python scripts/hooks/stop_session_checklist.py",
+        "linux": "python3 scripts/hooks/stop_session_checklist.py",
+        "osx": "python3 scripts/hooks/stop_session_checklist.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

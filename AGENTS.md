@@ -19,10 +19,11 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ---
 
-# GAIA: Geospatial AI-driven Assessment - Copilot Instructions
+# AGAILA: Geospatial AI-driven Assessment - Copilot Instructions
 
 ## Project Overview
-GAIA is a Philippine-focused environmental hazard detection system using Zero-Shot Classification (Climate-NLI) and Geo-NER to process RSS feeds and citizen reports, visualizing hazards on a real-time PWA map.
+AGAILA (A Framework Integrating Zero-Shot Classification and Geo-NER for Natural Hazard Detection) is a Philippine-focused environmental hazard detection system. It leverages Zero-Shot Classification (ZSC) via large language models (e.g., DeBERTa-MNLI, ClimateNLI) and Geospatial Named Entity Recognition (Geo-NER) to automatically detect and locate natural hazards from online information streams (RSS feeds, news articles, citizen reports) and real-time PWA map visualization.AGAILA reduces the "Time-to-Action" during crises by providing near real-time, geocoded environmental intelligence for LGUs, NDRRMC, and emergency responders.
+
 
 **CRITICAL DEVELOPMENT CONTEXT**: All development is conducted within Docker containers. Every feature, proposal, and implementation must account for:
 - Docker Compose orchestration of services (backend, frontend, Supabase)

@@ -1,4 +1,4 @@
-# GAIA Frontend Development - MCP Tools Guide
+# AGAILA Frontend Development - MCP Tools Guide
 
 ## Documentation Guidelines
 
@@ -17,7 +17,7 @@
 Always update `docs/README.md` when adding new documentation.
 
 ## Frontend-Specific Context
-You are working in the **frontend** folder of the GAIA project, a React + TypeScript PWA for Philippine hazard visualization.
+You are working in the **frontend** folder of the AGAILA project, a React + TypeScript PWA for Philippine hazard visualization.
 
 **Tech Stack**:
 - React 18 + TypeScript

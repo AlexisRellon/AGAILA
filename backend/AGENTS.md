@@ -1,4 +1,4 @@
-# GAIA Backend Development - MCP Tools Guide
+# AGAILA Backend Development - MCP Tools Guide
 
 ## Documentation Guidelines
 
@@ -17,7 +17,7 @@
 Always update `docs/README.md` when adding new documentation.
 
 ## Backend-Specific Context
-You are working in the **backend** folder of the GAIA project, focusing on AI/ML pipeline, data processing, and API services.
+You are working in the **backend** folder of the AGAILA project, focusing on AI/ML pipeline, data processing, and API services.
 
 **Tech Stack**:
 - Python 3.11+ (FastAPI/Flask)
