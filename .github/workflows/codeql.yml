@@ -95,6 +95,7 @@ jobs:
     - name: Validate Python syntax
       if: matrix.language == 'python'
       run: |
+        set -o pipefail
         echo "========================================="
         echo "Python Syntax Validation"
         echo "========================================="
@@ -112,33 +113,27 @@ jobs:
         passed=0
         
         for file in $python_files; do
-          if python -m py_compile "$file" 2>/dev/null; then
+          echo "[CHECK] $file"
+          if python -m py_compile "$file"; then
             echo "[PASS] $file"
             ((passed++))
           else
             echo "[FAIL] SYNTAX ERROR: $file"
-            echo "----------------------------------------"
-            python -m py_compile "$file" 2>&1 || true
-            echo "----------------------------------------"
             ((failed++))
           fi
+          echo "----------------------------------------"
         done
         
-        echo ""
         echo "========================================="
         echo "Validation Summary"
         echo "========================================="
         echo "Passed: $passed files"
         echo "Failed: $failed files"
-        echo ""
         
         if [ $failed -gt 0 ]; then
           echo "[ERROR] Python syntax validation failed!"
-          echo "Fix syntax errors before proceeding with CodeQL analysis."
           exit 1
         fi
-        
-        echo "[SUCCESS] All Python files validated successfully"
 
     - name: Setup Node.js environment
       if: matrix.language == 'javascript-typescript'
