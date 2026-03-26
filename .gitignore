@@ -122,3 +122,4 @@ QUICK_TEST_GUIDE*.md
 /fix_testcases.py
 /tests/e2e_cache_test.py
 /.github/prompts/ui-ux-pro-max
+/.github/skills

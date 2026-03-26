@@ -6,6 +6,50 @@ This directory contains GitHub Actions workflows for automated CI/CD and securit
 
 ## Workflows
 
+### CodeQL Advanced (`codeql.yml`)
+
+**Purpose**: Automated security vulnerability scanning and code quality analysis
+
+**Triggers**:
+- Push to `main` and `develop` branches
+- Pull requests to `main` and `develop`
+- Weekly schedule (Sundays at 22:26 UTC)
+- Manual dispatch (`workflow_dispatch`)
+
+**Languages Analyzed**:
+- Python (backend)
+- JavaScript/TypeScript (frontend)
+- GitHub Actions workflows
+
+**Key Features**:
+- **Python syntax pre-validation**: Validates all Python files using `python -m py_compile` before CodeQL analysis
+- **YAML validation**: Ensures all workflow files are syntactically correct
+- **Fail-fast approach**: Stops analysis if syntax errors are detected
+
+**Recent Fix (March 26, 2026)**:
+- Added Python syntax validation to prevent CodeQL parse errors
+- Fixed syntax error in `backend/python/utils/generate_psgc_sql.py` (f-string escaped quotes)
+- Replaced emoji characters with plain text markers for better encoding compatibility
+
+**Common Python Syntax Issues**:
+
+❌ **WRONG** - Escaped quotes in f-strings:
+```python
+values += f", {f\"'{region_code}'\" if region_code else 'NULL'}"
+# SyntaxError: unexpected character after line continuation character
+```
+
+✅ **CORRECT** - Nested f-strings without escaping:
+```python
+values += f", {f'{region_code!r}' if region_code else 'NULL'}"
+```
+
+**Results**:
+- View security alerts: **Security** → **Code scanning**
+- View workflow runs: **Actions** → **CodeQL Advanced**
+
+---
+
 ### StackHawk Security Scan (`stackhawk.yml`)
 
 **Purpose**: Automated security scanning for OWASP Top 10 vulnerabilities
@@ -65,8 +109,40 @@ To add a new workflow:
 3. Add required secrets to repository settings
 4. Commit and push to trigger workflow
 
+## Troubleshooting
+
+### CodeQL Parse Errors
+
+**Symptom**: "A parse error occurred while processing [file]"
+
+**Solution**:
+1. Validate Python syntax locally:
+   ```bash
+   python -m py_compile backend/python/path/to/file.py
+   ```
+2. Fix syntax errors (common issues: f-string escaping, indentation, encoding)
+3. Commit fix and re-run workflow
+
+### Workflow YAML Errors
+
+**Symptom**: Workflow fails to parse or start
+
+**Solution**:
+1. Validate YAML locally:
+   ```bash
+   python -c "import yaml; yaml.safe_load(open('.github/workflows/workflow.yml'))"
+   ```
+2. Check for indentation errors, invalid keys, or encoding issues
+3. Use plain ASCII text instead of emojis/special characters
+
 ## Resources
 
 - [GitHub Actions Docs](https://docs.github.com/en/actions)
+- [CodeQL Documentation](https://codeql.github.com/docs/)
 - [StackHawk Action](https://github.com/marketplace/actions/stackhawk-hawkscan-action)
-- [GAIA Testing Guide](../STACKHAWK_TESTING_GUIDE.md)
+- [GAIA Testing Guide](../../docs/security/STACKHAWK_TESTING_GUIDE.md)
+
+---
+
+**Last Updated**: March 26, 2026  
+**DevOps Automator**: CodeQL workflow enhanced with pre-validation checks

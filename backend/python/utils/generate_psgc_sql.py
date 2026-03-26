@@ -67,10 +67,10 @@ with open(csv_path, 'r', encoding='utf-8') as f, open(sql_output, 'w', encoding=
         
         # Build VALUES clause
         values = f"('{name}', '{admin_level}', '{psgc_code}'"
-        values += f", {f\"'{region_code}'\" if region_code else 'NULL'}"
-        values += f", {f\"'{province_code}'\" if province_code else 'NULL'}"
-        values += f", {f\"'{mun_code}'\" if mun_code else 'NULL'}"
-        values += f", {f\"'{bgy_code}'\" if bgy_code else 'NULL'}"
+        values += f", '{region_code}'" if region_code else ", NULL"
+        values += f", '{province_code}'" if province_code else ", NULL"
+        values += f", '{mun_code}'" if mun_code else ", NULL"
+        values += f", '{bgy_code}'" if bgy_code else ", NULL"
         values += f", {population if population else 'NULL'}"
         values += ", 'PSGC_Q4_2024')"
         
