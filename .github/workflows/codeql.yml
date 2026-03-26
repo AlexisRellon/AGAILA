@@ -121,12 +121,12 @@ jobs:
           # Capture both stdout and stderr to show full error details
           if error_output=$(python -m py_compile "$file" 2>&1); then
             echo "[PASS] $file"
-            ((passed++))
+            passed=$((passed+1))
           else
             echo "[FAIL] SYNTAX ERROR: $file"
             echo "Error details:"
             echo "$error_output"
-            ((failed++))
+            failed=$((failed+1))
           fi
           echo "----------------------------------------"
         done
