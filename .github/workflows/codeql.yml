@@ -100,19 +100,23 @@ jobs:
         echo "Python Syntax Validation"
         echo "========================================="
         
-        python_files=$(find backend frontend -name "*.py" 2>/dev/null || true)
-        if [ -z "$python_files" ]; then
+        python_files_array=()
+        while IFS= read -r -d '' file; do
+          python_files_array+=("$file")
+        done < <(find backend frontend -name "*.py" -print0 2>/dev/null || true)
+        
+        if [ ${#python_files_array[@]} -eq 0 ]; then
           echo "[INFO] No Python files found to validate"
           exit 0
         fi
         
-        echo "[INFO] Found $(echo "$python_files" | wc -l) Python files"
+        echo "[INFO] Found ${#python_files_array[@]} Python files"
         echo ""
         
         failed=0
         passed=0
         
-        for file in $python_files; do
+        for file in "${python_files_array[@]}"; do
           echo "[CHECK] $file"
           if python -m py_compile "$file"; then
             echo "[PASS] $file"
@@ -236,6 +240,7 @@ jobs:
             - '**/.venv'
 
     - name: Perform CodeQL Analysis
+      id: codeql-analyze
       uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{ matrix.language }}"
@@ -265,6 +270,10 @@ jobs:
         echo "- Build Mode: \`${{ matrix.build-mode }}\`" >> $GITHUB_STEP_SUMMARY
         echo "- Runner: \`${{ runner.os }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Status:** :white_check_mark: Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.codeql-analyze.outcome }}" == "success" ]; then
+          echo "**Status:** :white_check_mark: Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Status:** :x: Analysis failed" >> $GITHUB_STEP_SUMMARY
+        fi
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "View detailed results in the **Security** tab under **Code scanning alerts**" >> $GITHUB_STEP_SUMMARY

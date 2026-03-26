@@ -40,7 +40,7 @@ values += f", {f\"'{region_code}'\" if region_code else 'NULL'}"
 
 ✅ **CORRECT** - Nested f-strings without escaping:
 ```python
-values += f", {f"'{region_code}'" if region_code else 'NULL'}"
+values += f", {f'{region_code!r}' if region_code else 'NULL'}"
 ```
 
 **Results**:
