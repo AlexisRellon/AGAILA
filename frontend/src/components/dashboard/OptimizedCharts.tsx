@@ -176,7 +176,7 @@ export const OptimizedTrendsChart = memo<OptimizedTrendsChartProps>(
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number, name: string) => [value, formatHazardType(name)]}
+              formatter={(value: number | undefined, name: string) => [value ?? 0, formatHazardType(name)]}
             />
             {hazardTypes.map((item) => (
               <Area
@@ -255,8 +255,8 @@ export const OptimizedPieChart = memo<OptimizedPieChartProps>(
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number, _name: string, props: { payload?: { hazard_type?: string } }) => [
-                value,
+              formatter={(value: number | undefined, _name: string, props: { payload?: { hazard_type?: string } }) => [
+                value ?? 0,
                 formatHazardType(props.payload?.hazard_type ?? _name),
               ]}
             />
@@ -319,7 +319,7 @@ export const OptimizedDistributionBarChart = memo<OptimizedDistributionBarChartP
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number) => [value, 'Count']}
+              formatter={(value: number | undefined) => [value ?? 0, 'Count']}
               labelFormatter={formatHazardType}
             />
             <Bar dataKey="count">
