@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -161,7 +161,10 @@ const ResetPassword: React.FC = () => {
       if (error) throw error;
 
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        navigate('/login');
+      }, 3000);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to update password';
@@ -233,12 +236,15 @@ const ResetPassword: React.FC = () => {
             </div>
           </Alert>
           <div className="text-center">
-            <Link
-              to="/login"
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                navigate('/login');
+              }}
               className="text-sm text-secondary hover:text-primary hover:underline font-medium transition-colors"
             >
               Go to Login now
-            </Link>
+            </button>
           </div>
         </Card>
       </div>
@@ -520,13 +526,19 @@ const ResetPassword: React.FC = () => {
 
         {/* Back to Login */}
         <div className="text-center">
-          <Link
-            to="/login"
+          <button
+            onClick={async () => {
+              // Sign out user if authenticated (step 3) to prevent auto-redirect to dashboard
+              if (step === 'password') {
+                await supabase.auth.signOut();
+              }
+              navigate('/login');
+            }}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to Login
-          </Link>
+          </button>
         </div>
       </Card>
       </div>
