@@ -279,8 +279,6 @@ export function useRealtimeRSSFeeds() {
   // Only subscribe if user is admin (using userProfile role from database, not Auth user role)
   const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'validator';  useEffect(() => {
     if (!isAdmin) {
-      // eslint-disable-next-line no-console
-      console.log('[Realtime] Skipping RSS feed subscription (not admin)');
       return;
     }
 
