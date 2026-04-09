@@ -88,7 +88,18 @@ const SidebarProvider = React.forwardRef<
         }
 
         // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+        // Security attributes: Secure (HTTPS-only), SameSite (CSRF protection)
+        // Note: HttpOnly is omitted for sidebar state since JavaScript needs read access
+        // SECURITY FIX (CWE-614): Always set Secure flag for production (assumed HTTPS)
+        // In development, browser will ignore Secure flag on HTTP connections anyway
+        const cookieAttributes = [
+          `${SIDEBAR_COOKIE_NAME}=${openState}`,
+          'path=/',
+          `max-age=${SIDEBAR_COOKIE_MAX_AGE}`,
+          'SameSite=Strict',
+          'Secure'  // Always set Secure flag - production uses HTTPS
+        ].join('; ')
+        document.cookie = cookieAttributes
       },
       [setOpenProp, open]
     )
