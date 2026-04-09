@@ -752,14 +752,14 @@ describe('UserManagement Component', () => {
     });
 
     it('refetches data when realtime update occurs', async () => {
-      const mockChannel = {
+      const mockChannel: any = {
         on: vi.fn().mockImplementation((event: string, filter: unknown, callback: () => void) => {
           // Immediately trigger callback to simulate realtime event
           setTimeout(() => callback(), 100);
           return mockChannel;
         }),
         subscribe: vi.fn().mockReturnThis(),
-      } as const;
+      };
       (supabase.channel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockChannel);
 
       renderWithProviders(<UserManagement />);
@@ -775,10 +775,10 @@ describe('UserManagement Component', () => {
     });
 
     it('unsubscribes from channel on unmount', () => {
-      const mockChannel = {
+      const mockChannel: any = {
         on: vi.fn().mockReturnThis(),
         subscribe: vi.fn().mockReturnThis(),
-      } as const;
+      };
       (supabase.channel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockChannel);
 
       const { unmount } = renderWithProviders(<UserManagement />);
