@@ -1493,7 +1493,9 @@ async def validate_rss_article(
         
         updated_data = result.data[0]
         
-        logger.info(f"Validated RSS article {article_id} by {current_user.email}")
+        safe_article_id = article_id.replace('\r', '').replace('\n', '')
+        safe_user_email = str(current_user.email).replace('\r', '').replace('\n', '')
+        logger.info(f"Validated RSS article {safe_article_id} by {safe_user_email}")
         
         # Log admin action
         await log_admin_action(
