@@ -11,6 +11,10 @@ import sys
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'backend', 'python'))
 
+# Test Fixtures: Passwords used only for testing key derivation functionality
+# NOT production credentials - these are dummy test data for unit test verification
+TEST_PASSWORD_FOR_KEY_DERIVATION = "my-secure-passphrase"
+
 
 class TestFieldEncryptionModule:
     """Test the field encryption module functionality"""
@@ -336,7 +340,7 @@ class TestKeyGeneration:
         """Test key derivation from password"""
         from backend.python.utils.field_encryption import derive_key_from_password
         
-        password = "my-secure-passphrase"
+        password = TEST_PASSWORD_FOR_KEY_DERIVATION
         salt = bytes.fromhex("0123456789abcdef0123456789abcdef")
         
         key = derive_key_from_password(password, salt)
@@ -352,7 +356,7 @@ class TestKeyGeneration:
         """Test that different salts produce different keys"""
         from backend.python.utils.field_encryption import derive_key_from_password
         
-        password = "my-secure-passphrase"
+        password = TEST_PASSWORD_FOR_KEY_DERIVATION
         salt1 = bytes.fromhex("0123456789abcdef0123456789abcdef")
         salt2 = bytes.fromhex("fedcba9876543210fedcba9876543210")
         
