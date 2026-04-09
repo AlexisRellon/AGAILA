@@ -4,7 +4,10 @@ uvicorn[standard]>=0.24.0
 pydantic[email]>=2.4.0
 email-validator>=2.0.0
 
-# Core AI/ML Dependencies (using prebuilt wheels)
+# Core AI/ML Dependencies (CPU-only for deployment)
+# Use CPU-only torch to avoid downloading ~2.5GB of NVIDIA CUDA libraries
+# Railway has no GPU support, so CUDA packages are unnecessary
+--extra-index-url https://download.pytorch.org/whl/cpu
 transformers>=4.35.0
 torch>=2.0.0
 spacy>=3.5.0

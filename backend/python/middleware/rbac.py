@@ -362,54 +362,63 @@ async def log_admin_action(
     success: bool = True,
     error_message: Optional[str] = None,
     request: Optional[Request] = None,
-    severity: Optional[str] = "INFO",
+    severity: Optional[str] = "info",  # Changed default to lowercase to match schema constraint
     status: Optional[str] = "success" # ANY (ARRAY['success'::text, 'failure'::text, 'pending'::text])
 ):
     """
     Log administrative actions to audit_logs table.
     
     This function is called after admin operations to maintain audit trail (AC-05).
+    
+    Schema: gaia.audit_logs (event_type, severity, user_id, user_email, action, resource, status, message, metadata, ip_address, created_at)
     """
     try:
-        # Extract IP address and user agent from request
+        # Extract IP address from request
         ip_address = None
-        user_agent = None
         
         if request:
             # Get client IP (handle proxies)
             forwarded = request.headers.get("X-Forwarded-For")
             ip_address = forwarded.split(",")[0] if forwarded else request.client.host
-            user_agent = request.headers.get("User-Agent")
         
-        # Build details JSON object to store fields not native to the schema
-        details = {
-            "user_role": user.role.value if hasattr(user, 'role') else str(user.role),
-            "old_values": old_values,
-            "event_type": event_type,
-            "severity": severity,
-            "status": status
-        }
+        # Build metadata with old/new values and user agent
+        metadata = {}
+        if old_values:
+            metadata["old_values"] = old_values
+        if new_values:
+            metadata["new_values"] = new_values
+        if request:
+            metadata["user_agent"] = request.headers.get("User-Agent")
+            metadata["user_role"] = user.role.value
+            metadata["resource_type"] = resource_type
+        if resource_id:
+            metadata["resource_id"] = resource_id
+        if error_message:
+            metadata["error_message"] = error_message
         
-        # Insert audit log
+        # Normalize severity to lowercase (schema constraint)
+        severity_normalized = severity.lower() if severity else "info"
+        
+        # Insert audit log with correct schema
         supabase.schema("gaia").from_("audit_logs").insert({
+            "event_type": event_type,
+            "severity": severity_normalized,
             "user_id": user.user_id,
             "user_email": user.email,
             "action": action,
-            "action_description": action_description,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "details": details,
-            "new_values": new_values,
-            "ip_address": ip_address,
-            "user_agent": user_agent,
-            "success": success,
-            "error_message": error_message
+            "resource": f"{resource_type}:{resource_id}" if resource_id else resource_type,
+            "status": status if not success else "success",
+            "message": action_description,
+            "metadata": metadata,
+            "ip_address": ip_address
         }).execute()
         
         logger.info(f"Audit log: {user.email} - {action} - {action_description}")
         
     except Exception as e:
         logger.error(f"Failed to log audit event: {str(e)}")
+        # Log the full exception for debugging
+        logger.error(f"Audit logging error details: {repr(e)}", exc_info=True)
         # Don't raise exception - audit logging failure shouldn't block operations
 
 

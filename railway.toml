@@ -121,7 +121,7 @@ healthcheckTimeout = 180  # Faster startup for PRs
 #    - DATABASE_URL (if using managed PostgreSQL)
 #    - REDIS_URL (from Railway Redis service)
 #    - ENV=production
-#    - CORS_ORIGINS=https://*.up.railway.app
+#    - CORS_ORIGINS=https://agaila-ph.vercel.app,https://gaia-production-2294.up.railway.app
 #    - RECAPTCHA_SECRET_KEY
 #    - API_URL (frontend needs backend URL)
 #

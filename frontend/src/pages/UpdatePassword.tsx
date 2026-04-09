@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -65,7 +65,10 @@ const UpdatePassword: React.FC = () => {
       if (error) throw error;
 
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        navigate('/login');
+      }, 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update password';
       setError(errorMessage);
@@ -119,9 +122,15 @@ const UpdatePassword: React.FC = () => {
               </div>
             </Alert>
             <div className="text-center">
-              <Link to="/login" className="text-sm text-primary hover:underline font-medium">
+              <button 
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/login');
+                }}
+                className="text-sm text-primary hover:underline font-medium"
+              >
                 Go to Login now
-              </Link>
+              </button>
             </div>
           </div>
         ) : (
@@ -214,13 +223,17 @@ const UpdatePassword: React.FC = () => {
         )}
 
         <div className="text-center">
-          <Link
-            to="/login"
+          <button
+            onClick={async () => {
+              // Sign out user to prevent auto-redirect to dashboard
+              await supabase.auth.signOut();
+              navigate('/login');
+            }}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to Login
-          </Link>
+          </button>
         </div>
       </Card>
       </div>
