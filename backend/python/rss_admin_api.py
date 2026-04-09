@@ -1189,7 +1189,8 @@ async def delete_rss_article(
             .eq('source_type', 'rss') \
             .execute()
         
-        logger.info(f"Deleted RSS article: {article_id} by {current_user.email}")
+        safe_article_id = article_id.replace('\r', '').replace('\n', '')
+        logger.info(f"Deleted RSS article: {safe_article_id} by {current_user.email}")
         
         # Log admin action
         await log_admin_action(
