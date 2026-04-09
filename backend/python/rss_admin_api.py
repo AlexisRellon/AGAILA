@@ -17,6 +17,11 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, Query
 from pydantic import BaseModel, HttpUrl, Field, validator
 
+
+def _sanitize_for_log(value: object) -> str:
+    """Sanitize untrusted values before logging to prevent log injection."""
+    return str(value).replace("\r", "").replace("\n", "")
+
 # Import security middleware
 from slowapi import Limiter
 from backend.python.middleware.rate_limiter import limiter
@@ -1400,7 +1405,9 @@ async def update_rss_article(
             
         updated_data = result.data[0]
         
-        logger.info(f"Updated RSS article {article_id} by {current_user.email}: {list(update_dict.keys())}")
+        safe_article_id = _sanitize_for_log(article_id)
+        safe_user_email = _sanitize_for_log(current_user.email)
+        logger.info(f"Updated RSS article {safe_article_id} by {safe_user_email}: {list(update_dict.keys())}")
         
         # Log admin action
         await log_admin_action(
