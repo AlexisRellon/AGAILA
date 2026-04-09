@@ -759,7 +759,7 @@ describe('UserManagement Component', () => {
           return mockChannel;
         }),
         subscribe: vi.fn().mockReturnThis(),
-      };
+      } as const;
       (supabase.channel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockChannel);
 
       renderWithProviders(<UserManagement />);
@@ -778,7 +778,7 @@ describe('UserManagement Component', () => {
       const mockChannel = {
         on: vi.fn().mockReturnThis(),
         subscribe: vi.fn().mockReturnThis(),
-      };
+      } as const;
       (supabase.channel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockChannel);
 
       const { unmount } = renderWithProviders(<UserManagement />);
