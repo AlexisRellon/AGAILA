@@ -158,8 +158,8 @@ def generate_cache_key(
     key = ":".join(components)
     
     if len(key) > 200:
-        # Hash long keys
-        hash_suffix = hashlib.md5(key.encode()).hexdigest()[:12]
+        # Hash long keys using SHA-256 (CWE-916: MD5 replaced with secure hash)
+        hash_suffix = hashlib.sha256(key.encode()).hexdigest()[:12]
         key = f"{CACHE_PREFIX}:{prefix}:{hash_suffix}"
     
     return key

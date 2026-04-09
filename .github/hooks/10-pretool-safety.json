@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python scripts/hooks/pretool_safety_guard.py",
+        "linux": "python3 scripts/hooks/pretool_safety_guard.py",
+        "osx": "python3 scripts/hooks/pretool_safety_guard.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

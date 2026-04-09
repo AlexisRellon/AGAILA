@@ -45,12 +45,21 @@ const REGION_COLORS = {
   resolved: '#22c55e',
 };
 
-function formatHazardType(raw: string | number): string {
+function formatHazardType(raw: string | number | undefined): string {
+  if (!raw) return '';
   const str = String(raw);
   return str
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+function formatLabelForTooltip(label: unknown): string {
+  if (label === null || label === undefined) return '';
+  if (typeof label === 'string' || typeof label === 'number') {
+    return formatHazardType(label);
+  }
+  return String(label);
 }
 
 function renderColorLegend(
@@ -176,7 +185,7 @@ export const OptimizedTrendsChart = memo<OptimizedTrendsChartProps>(
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number, name: string) => [value, formatHazardType(name)]}
+              formatter={(value, name) => [value ?? 0, formatHazardType(name)]}
             />
             {hazardTypes.map((item) => (
               <Area
@@ -255,8 +264,8 @@ export const OptimizedPieChart = memo<OptimizedPieChartProps>(
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number, _name: string, props: { payload?: { hazard_type?: string } }) => [
-                value,
+              formatter={(value, _name, props: { payload?: { hazard_type?: string } }) => [
+                value ?? 0,
                 formatHazardType(props.payload?.hazard_type ?? _name),
               ]}
             />
@@ -319,8 +328,8 @@ export const OptimizedDistributionBarChart = memo<OptimizedDistributionBarChartP
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
               }}
-              formatter={(value: number) => [value, 'Count']}
-              labelFormatter={formatHazardType}
+              formatter={(value) => [value ?? 0, 'Count']}
+              labelFormatter={formatLabelForTooltip}
             />
             <Bar dataKey="count">
               {data.map((entry, index) => (

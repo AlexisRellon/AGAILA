@@ -17,6 +17,7 @@
  */
 
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Dialog,
   DialogContent,
@@ -78,6 +79,31 @@ interface ReportGeneratorProps {
 }
 
 type ReportStep = 'idle' | 'capturing' | 'generating' | 'success' | 'error';
+
+/**
+ * Sanitize text input to prevent XSS attacks
+ * Strips all HTML tags and dangerous characters
+ */
+const sanitizeText = (text: string): string => {
+  // Configure DOMPurify to strip ALL HTML tags (text-only output)
+  const clean = DOMPurify.sanitize(text, {
+    ALLOWED_TAGS: [],        // No HTML tags allowed
+    ALLOWED_ATTR: [],        // No attributes allowed
+    KEEP_CONTENT: true,      // Keep text content
+  });
+  return clean.trim();
+};
+
+/**
+ * Sanitize filename to prevent path traversal and XSS
+ * Only allows alphanumeric, spaces, hyphens, and underscores
+ */
+const sanitizeFilename = (filename: string): string => {
+  return filename
+    .replace(/[^a-zA-Z0-9\s\-_]/g, '') // Remove special chars
+    .replace(/\s+/g, '_')               // Replace spaces with underscores
+    .substring(0, 100);                 // Limit length
+};
 
 export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   hazards,
@@ -188,6 +214,10 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
       // Step 2: Prepare report data
       setCurrentStep('generating');
 
+      // Sanitize user inputs to prevent XSS
+      const sanitizedTitle = sanitizeText(reportTitle);
+      const sanitizedGeneratedBy = sanitizeText(generatedBy);
+
       const reportRequest = {
         hazards: hazards.map(h => ({
           id: h.id,
@@ -202,8 +232,8 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
           source_content: h.source_content || null,
         })),
         metadata: {
-          title: reportTitle,
-          generated_by: generatedBy,
+          title: sanitizedTitle,
+          generated_by: sanitizedGeneratedBy,
           time_range: getTimeRange(),
           filter_summary: getFilterSummary(),
           total_hazards: hazards.length,
@@ -226,8 +256,19 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(errorData.detail || 'Failed to generate PDF');
+        try {
+          const errorData = await response.json();
+          // SECURITY FIX (CWE-79): Always sanitize backend error messages to prevent DOM-based XSS
+          // Validate that detail is a string before sanitizing
+          const rawErrorMessage = (errorData?.detail && typeof errorData.detail === 'string')
+            ? errorData.detail
+            : 'Failed to generate PDF';
+          const sanitizedError = sanitizeText(rawErrorMessage);
+          throw new Error(sanitizedError);
+        } catch (parseError: unknown) {
+          // If JSON parsing fails, use generic error message
+          throw new Error('Failed to generate PDF');
+        }
       }
 
       // Step 4: Download PDF
@@ -237,7 +278,9 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
       link.href = url;
       
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const filename = `gaia_hazard_report_${timestamp}.pdf`;
+      // Sanitize filename to prevent XSS and path traversal
+      const safeTitle = sanitizeFilename(sanitizedTitle || 'report');
+      const filename = `gaia_${safeTitle}_${timestamp}.pdf`;
       link.download = filename;
       
       document.body.appendChild(link);
@@ -265,11 +308,9 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
     } catch (error) {
       console.error('Report generation failed:', error);
       setCurrentStep('error');
-      setErrorMessage(
-        error instanceof Error 
-          ? error.message 
-          : 'An unknown error occurred'
-      );
+      // Sanitize error message to prevent XSS
+      const rawMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setErrorMessage(sanitizeText(rawMessage));
     }
   };
 
@@ -371,6 +412,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
                 value={reportTitle}
                 onChange={(e) => setReportTitle(e.target.value)}
                 placeholder="GAIA Hazard Report"
+                maxLength={200}
               />
             </div>
 
@@ -383,6 +425,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
                 value={generatedBy}
                 onChange={(e) => setGeneratedBy(e.target.value)}
                 placeholder="GAIA System"
+                maxLength={100}
               />
             </div>
 

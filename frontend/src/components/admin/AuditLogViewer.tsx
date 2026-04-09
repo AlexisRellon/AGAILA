@@ -25,7 +25,7 @@ import {
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Search, Download, Filter, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Download, Filter, CheckCircle2, XCircle, Eye } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -34,6 +34,7 @@ import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Alert, AlertDescription } from '../ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { TableSkeleton } from '../dashboard/AnalyticsSkeleton';
 import { adminApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
@@ -58,6 +59,11 @@ interface AuditLog {
   status: string;
   message?: string | null;
   metadata?: Record<string, unknown>;
+  context?: Record<string, unknown> | null;
+  error_category?: string | null;
+  error_source?: string | null;
+  error_code?: string | null;
+  stack_trace?: string | null;
   created_at: string;
 }
 
@@ -102,6 +108,10 @@ const AuditLogViewer: React.FC = () => {
   const [resourceTypeFilter, setResourceTypeFilter] = useState('all');
   const [successFilter, setSuccessFilter] = useState<boolean | null>(null);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+
+  // Details dialog state
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
@@ -206,6 +216,22 @@ const AuditLogViewer: React.FC = () => {
         </span>
       ),
     }),
+    columnHelper.display({
+      id: 'actions',
+      header: '',
+      cell: (info) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSelectedLog(info.row.original);
+            setIsDetailsOpen(true);
+          }}
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
+      ),
+    }),
   ];
 
   const table = useReactTable({
@@ -301,6 +327,10 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="rss_feed_updated">RSS Feed Updated</SelectItem>
                 <SelectItem value="rss_feed_deleted">RSS Feed Deleted</SelectItem>
                 <SelectItem value="rss_processing_started">RSS Processing Started</SelectItem>
+                <SelectItem value="rss_article_validated">RSS Article Validated</SelectItem>
+                <SelectItem value="rss_article_updated">RSS Article Updated</SelectItem>
+                <SelectItem value="rss_article_deleted">RSS Article Deleted</SelectItem>
+                <SelectItem value="rss_articles_bulk_deleted">RSS Articles Bulk Deleted</SelectItem>
               </SelectContent>
             </Select>
 
@@ -368,38 +398,8 @@ const AuditLogViewer: React.FC = () => {
             </Button>
           </div>
 
-          {/* Pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-y-2 mt-4">
-          <div className="text-sm text-muted-foreground">
-            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-            {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, logs.length)} of{' '}
-            {logs.length} logs
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Previous
-            </Button>
-            <span className="text-sm">
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-
           {/* Clear Filters */}
-          {(emailFilter || actionFilter !== 'all' || resourceTypeFilter !== 'all' || successFilter !== null || dateRange.from) && (
+          {(emailFilter || actionFilter !== 'all' || resourceTypeFilter !== 'all' || successFilter !== null || dateRange.from || dateRange.to) && (
             <Button
               variant="ghost"
               size="sm"
@@ -505,6 +505,122 @@ const AuditLogViewer: React.FC = () => {
           </div>
         </div>
       </CardContent>
+
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Audit Log Details</DialogTitle>
+            <DialogDescription>
+              {selectedLog && format(new Date(selectedLog.created_at), 'PPP pp')}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedLog && (
+            <div className="space-y-4 text-sm mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">User</h4>
+                  <p>{selectedLog.user_email || 'System'} ({selectedLog.user_role || 'No Role'})</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Action</h4>
+                  <Badge variant="outline" className={getActionBadgeStyle(selectedLog.action)}>
+                    {selectedLog.action}
+                  </Badge>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Resource</h4>
+                  <p>{selectedLog.resource_type || '-'} {selectedLog.resource_id ? `(${selectedLog.resource_id})` : ''}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Status</h4>
+                  <div className="flex items-center gap-1">
+                    {selectedLog.success ? (
+                      <><CheckCircle2 className="h-4 w-4 text-green-600" /><span className="text-green-600">Success</span></>
+                    ) : (
+                      <><XCircle className="h-4 w-4 text-red-600" /><span className="text-red-600">Failed</span></>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {selectedLog.action_description && (
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Description</h4>
+                  <p>{selectedLog.action_description}</p>
+                </div>
+              )}
+
+              {selectedLog.error_message && (
+                <div>
+                  <h4 className="font-semibold text-red-500 mb-1">Error Message</h4>
+                  <p className="text-red-600 bg-red-50 p-2 rounded border border-red-100">{selectedLog.error_message}</p>
+                </div>
+              )}
+
+              {selectedLog.error_category && (
+                <div className="grid grid-cols-2 gap-4 bg-muted p-3 rounded-md">
+                  <div>
+                    <h4 className="font-semibold text-muted-foreground mb-1">Error Category</h4>
+                    <p>{selectedLog.error_category}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-muted-foreground mb-1">Error Source</h4>
+                    <p>{selectedLog.error_source || '-'}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedLog.old_values && Object.keys(selectedLog.old_values).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-muted-foreground mb-1">Old Values</h4>
+                    <pre className="bg-muted p-2 rounded-md overflow-x-auto text-xs">
+                      {JSON.stringify(selectedLog.old_values, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {selectedLog.new_values && Object.keys(selectedLog.new_values).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-muted-foreground mb-1">New Values</h4>
+                    <pre className="bg-muted p-2 rounded-md overflow-x-auto text-xs">
+                      {JSON.stringify(selectedLog.new_values, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {selectedLog.context && Object.keys(selectedLog.context).length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Context</h4>
+                  <pre className="bg-muted p-2 rounded-md overflow-x-auto text-xs border-l-4 border-l-blue-500">
+                    {JSON.stringify(selectedLog.context, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {selectedLog.metadata && Object.keys(selectedLog.metadata).length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Metadata</h4>
+                  <pre className="bg-muted p-2 rounded-md overflow-x-auto text-xs">
+                    {JSON.stringify(selectedLog.metadata, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {selectedLog.stack_trace && (
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-1">Stack Trace</h4>
+                  <pre className="bg-muted p-2 rounded-md overflow-x-auto text-xs text-red-500">
+                    {selectedLog.stack_trace}
+                  </pre>
+                </div>
+              )}
+
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

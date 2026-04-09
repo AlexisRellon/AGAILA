@@ -102,7 +102,7 @@ class CreateUserRequest(BaseModel):
         schema_extra = {
             "example": {
                 "email": "validator@example.com",
-                "password": "SecurePass123!",
+                "password": "",  # Min 8 characters, use strong password with mix of upper/lower/numbers/symbols
                 "full_name": "Juan Dela Cruz",
                 "role": "validator",
                 "organization": "NDRRMC",

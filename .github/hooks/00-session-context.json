@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python scripts/hooks/sessionstart_context.py",
+        "linux": "python3 scripts/hooks/sessionstart_context.py",
+        "osx": "python3 scripts/hooks/sessionstart_context.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

@@ -22,13 +22,14 @@ import { AlertCircle, Send, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { ALL_HAZARD_TYPES } from '../hooks/useHazardFilters';
 import { HAZARD_ICON_REGISTRY, HazardIcon } from '../constants/hazard-icons';
 import ImageUpload from '../components/reports/ImageUpload';
-// LocationPicker wraps Leaflet (~150KB+). Lazy-load it so it's excluded from
-// the initial CitizenReportForm chunk and only fetched when the form renders.
-const LocationPicker = React.lazy(() => import('../components/reports/LocationPicker'));
 // import { supabase } from '../lib/supabase'; // TEMPORARILY DISABLED - backend handles image upload
 import { API_BASE_URL } from '../lib/api';
 import { isValidPhilippinePhoneNumber } from '../utils/phoneValidation';
 import { z } from 'zod';
+
+// LocationPicker wraps Leaflet (~150KB+). Lazy-load it so it's excluded from
+// the initial CitizenReportForm chunk and only fetched when the form renders.
+const LocationPicker = React.lazy(() => import('../components/reports/LocationPicker'));
 
 /** Must match backend SUBMISSION_COOLDOWN_SECONDS. Cooldown starts on successful submit. */
 const SUBMISSION_COOLDOWN_SECONDS = 300;
