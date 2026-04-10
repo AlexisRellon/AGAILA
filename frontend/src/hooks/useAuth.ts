@@ -222,7 +222,16 @@ export function useSignIn() {
         } : undefined,
       });
 
-      if (error) throw error;
+      if (error) {
+        await logAuthEvent(
+          '',
+          email,
+          'FAILED_LOGIN',
+          undefined,
+          error.message
+        );
+        throw error;
+      }
       
       // Get session ID for logging
       const sessionId = data.session?.access_token?.substring(0, 20);
