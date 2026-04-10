@@ -381,29 +381,27 @@ async def log_admin_action(
             ip_address = forwarded.split(",")[0] if forwarded else request.client.host
             user_agent = request.headers.get("User-Agent")
         
-        # Build details JSON object to store fields not native to the schema
-        details = {
-            "user_role": user.role.value if hasattr(user, 'role') else str(user.role),
-            "old_values": old_values,
-            "event_type": event_type,
-            "severity": severity,
-            "status": status
-        }
+        user_role = user.role.value if hasattr(user, 'role') else str(user.role)
         
-        # Insert audit log
+        # Insert audit log with all required top-level columns
+        # old_values, user_role, severity, status are NOT NULL in the DB schema
         supabase.schema("gaia").from_("audit_logs").insert({
             "user_id": user.user_id,
             "user_email": user.email,
+            "user_role": user_role,
             "action": action,
             "action_description": action_description,
+            "event_type": event_type,
             "resource_type": resource_type,
             "resource_id": resource_id,
-            "details": details,
-            "new_values": new_values,
+            "old_values": old_values if old_values is not None else {},
+            "new_values": new_values if new_values is not None else {},
             "ip_address": ip_address,
             "user_agent": user_agent,
             "success": success,
-            "error_message": error_message
+            "error_message": error_message,
+            "severity": severity or "INFO",
+            "status": status or "success",
         }).execute()
         
         logger.info(f"Audit log: {user.email} - {action} - {action_description}")

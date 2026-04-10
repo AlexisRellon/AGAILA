@@ -247,7 +247,7 @@ async def create_rss_feed(
         try:
             await ActivityLogger.log_activity(
                 user_context=current_user,
-                action="RSS_FEED_CREATED",
+                action="RSS_FEED_ADDED",
                 request=request,
                 resource_type="rss_feeds",
                 resource_id=result.data[0]['id'],
@@ -264,14 +264,20 @@ async def create_rss_feed(
         try:
             await log_admin_action(
                 user=current_user,
-                action="rss_feed_created",
+                action="rss_feed_added",
                 action_description=f"Added RSS feed: {feed.feed_name} ({feed.feed_url})",
                 resource_type="rss_feeds",
                 resource_id=result.data[0]['id'],
                 old_values={},
-                new_values={"feed_name": feed.feed_name, "feed_url": str(feed.feed_url), "category": feed.feed_category},
+                new_values={
+                    "feed_id": result.data[0]['id'],
+                    "feed_name": feed.feed_name,
+                    "feed_url": str(feed.feed_url),
+                    "category": feed.feed_category,
+                    "is_active": feed.is_active,
+                },
                 request=request,
-                event_type="RSS_FEED_CREATED",
+                event_type="RSS_FEED_ADDED",
             )
         except Exception as log_error:
             logger.warning(f"Failed to log audit: {log_error}")
@@ -312,6 +318,27 @@ async def update_rss_feed(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No fields provided for update"
             )
+        
+        # Fetch current feed state before updating for audit trail
+        existing_feed = supabase.schema('gaia').table('rss_feeds') \
+            .select('*') \
+            .eq('id', feed_id) \
+            .execute()
+        
+        if not existing_feed.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSS feed not found"
+            )
+        
+        old_feed = existing_feed.data[0]
+        old_values = {k: old_feed.get(k) for k in update_data.keys()}
+        
+        # Detect is_active status change for dedicated audit event
+        status_changed = (
+            'is_active' in update_data
+            and old_feed.get('is_active') != update_data['is_active']
+        )
         
         # Update feed
         result = supabase.schema('gaia').table('rss_feeds') \
@@ -354,13 +381,35 @@ async def update_rss_feed(
                 action_description=f"Updated RSS feed {result.data[0].get('feed_name')}: {', '.join(update_data.keys())}",
                 resource_type="rss_feeds",
                 resource_id=feed_id,
-                old_values={},
+                old_values=old_values,
                 new_values=update_data,
                 request=request,
                 event_type="RSS_FEED_UPDATED",
             )
         except Exception as log_error:
             logger.warning(f"Failed to log audit: {log_error}")
+
+        # If is_active was toggled, emit a dedicated RSS_FEED_STATUS_CHANGED audit event
+        if status_changed:
+            previous_status = old_feed.get('is_active')
+            new_status = update_data['is_active']
+            try:
+                await log_admin_action(
+                    user=current_user,
+                    action="rss_feed_status_changed",
+                    action_description=(
+                        f"{'Activated' if new_status else 'Deactivated'} RSS feed: "
+                        f"{result.data[0].get('feed_name')}"
+                    ),
+                    resource_type="rss_feeds",
+                    resource_id=feed_id,
+                    old_values={"feed_id": feed_id, "is_active": previous_status},
+                    new_values={"feed_id": feed_id, "is_active": new_status},
+                    request=request,
+                    event_type="RSS_FEED_STATUS_CHANGED",
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log status change audit: {log_error}")
         
         return result.data[0]
         
@@ -391,10 +440,20 @@ async def delete_rss_feed(
     Note: This will also delete all associated processing logs (CASCADE).
     """
     try:
-        # Get feed info before deleting for logging
-        feed_info = supabase.schema('gaia').table('rss_feeds').select('feed_name, feed_url').eq('id', feed_id).execute()
-        feed_name = feed_info.data[0].get('feed_name') if feed_info.data else 'Unknown'
-        feed_url = feed_info.data[0].get('feed_url') if feed_info.data else 'Unknown'
+        # Get full feed info before deleting for audit trail
+        feed_info = supabase.schema('gaia').table('rss_feeds') \
+            .select('feed_name, feed_url, feed_category, is_active, priority') \
+            .eq('id', feed_id).execute()
+        
+        if not feed_info.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RSS feed not found"
+            )
+        
+        feed_snapshot = feed_info.data[0]
+        feed_name = feed_snapshot.get('feed_name', 'Unknown')
+        feed_url = feed_snapshot.get('feed_url', 'Unknown')
         
         result = supabase.schema('gaia').table('rss_feeds').delete().eq('id', feed_id).execute()
         
@@ -413,7 +472,7 @@ async def delete_rss_feed(
         try:
             await ActivityLogger.log_activity(
                 user_context=current_user,
-                action="RSS_FEED_DELETED",
+                action="RSS_FEED_REMOVED",
                 request=request,
                 resource_type="rss_feeds",
                 resource_id=feed_id,
@@ -429,14 +488,20 @@ async def delete_rss_feed(
         try:
             await log_admin_action(
                 user=current_user,
-                action="rss_feed_deleted",
-                action_description=f"Deleted RSS feed: {feed_name} ({feed_url})",
+                action="rss_feed_removed",
+                action_description=f"Removed RSS feed: {feed_name} ({feed_url})",
                 resource_type="rss_feeds",
                 resource_id=feed_id,
-                old_values={"feed_name": feed_name, "feed_url": feed_url},
+                old_values={
+                    "feed_id": feed_id,
+                    "feed_name": feed_name,
+                    "feed_url": feed_url,
+                    "feed_category": feed_snapshot.get('feed_category'),
+                    "is_active": feed_snapshot.get('is_active'),
+                },
                 new_values={},
                 request=request,
-                event_type="RSS_FEED_DELETED",
+                event_type="RSS_FEED_REMOVED",
             )
         except Exception as log_error:
             logger.warning(f"Failed to log audit: {log_error}")
