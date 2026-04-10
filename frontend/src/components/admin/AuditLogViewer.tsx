@@ -80,7 +80,8 @@ function getActionBadgeStyle(action: string): string {
   if (lower.includes('validated') || lower.includes('approved') || lower.includes('created')) {
     return 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600';
   }
-  // Auth - login blue, logout muted
+  // Auth - failed login orange/warning, login blue, logout muted
+  if (lower === 'failed_login') return 'bg-orange-600 text-white border-orange-700 hover:bg-orange-600';
   if (lower.includes('login')) return 'bg-blue-600 text-white border-blue-700 hover:bg-blue-600';
   if (lower.includes('logout')) return 'bg-slate-500 text-white border-slate-600 hover:bg-slate-500';
   // Updates - amber
@@ -254,7 +255,7 @@ const AuditLogViewer: React.FC = () => {
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Timestamp', 'User Email', 'Role', 'Action', 'Description', 'Resource Type', 'Resource ID', 'Success', 'IP Address'];
+    const headers = ['Timestamp', 'User Email', 'Role', 'Action', 'Description', 'Resource Type', 'Resource ID', 'Status', 'IP Address'];
     const rows = logs.map((log: AuditLog) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
       log.user_email || 'System',
@@ -314,8 +315,9 @@ const AuditLogViewer: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All actions</SelectItem>
-                <SelectItem value="login">Login</SelectItem>
-                <SelectItem value="logout">Logout</SelectItem>
+                <SelectItem value="LOGIN">Login</SelectItem>
+                <SelectItem value="LOGOUT">Logout</SelectItem>
+                <SelectItem value="FAILED_LOGIN">Failed Login</SelectItem>
                 <SelectItem value="user_created">User Created</SelectItem>
                 <SelectItem value="role_changed">Role Changed</SelectItem>
                 <SelectItem value="user_deactivated">User Deactivated</SelectItem>
@@ -341,6 +343,7 @@ const AuditLogViewer: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All resources</SelectItem>
+                <SelectItem value="authentication">Authentication</SelectItem>
                 <SelectItem value="user_profiles">User Profiles</SelectItem>
                 <SelectItem value="system_config">System Config</SelectItem>
                 <SelectItem value="citizen_reports">Citizen Reports</SelectItem>
