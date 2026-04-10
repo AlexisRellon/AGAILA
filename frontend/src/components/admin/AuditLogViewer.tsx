@@ -92,6 +92,12 @@ function getActionBadgeStyle(action: string): string {
   if (lower.includes('printed') || lower.includes('print')) {
     return 'bg-teal-600 text-white border-teal-700 hover:bg-teal-600';
   }
+  // RSS feed added - green (already covered by 'created' above, but explicit for clarity)
+  if (lower === 'rss_feed_added') return 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600';
+  // RSS feed removed - red (already covered by 'deleted' above, but explicit for clarity)
+  if (lower === 'rss_feed_removed') return 'bg-red-500/90 text-white border-red-600 hover:bg-red-500';
+  // RSS feed status changed - amber
+  if (lower === 'rss_feed_status_changed') return 'bg-amber-600 text-white border-amber-700 hover:bg-amber-600';
   // RSS processing - violet
   if (lower.includes('processing') || lower.includes('started')) {
     return 'bg-violet-600 text-white border-violet-700 hover:bg-violet-600';
@@ -325,9 +331,10 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="report_validated">Report Validated</SelectItem>
                 <SelectItem value="report_rejected">Report Rejected</SelectItem>
                 <SelectItem value="report_printed">Report Printed</SelectItem>
-                <SelectItem value="rss_feed_created">RSS Feed Created</SelectItem>
+                <SelectItem value="rss_feed_added">RSS Feed Added</SelectItem>
+                <SelectItem value="rss_feed_removed">RSS Feed Removed</SelectItem>
+                <SelectItem value="rss_feed_status_changed">RSS Feed Status Changed</SelectItem>
                 <SelectItem value="rss_feed_updated">RSS Feed Updated</SelectItem>
-                <SelectItem value="rss_feed_deleted">RSS Feed Deleted</SelectItem>
                 <SelectItem value="rss_processing_started">RSS Processing Started</SelectItem>
                 <SelectItem value="rss_article_validated">RSS Article Validated</SelectItem>
                 <SelectItem value="rss_article_updated">RSS Article Updated</SelectItem>
