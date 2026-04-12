@@ -54,6 +54,6 @@ httpx>=0.25.0
 # Code Quality
 black>=23.11.0
 flake8>=6.1.0
-urllib3>=1.26.19 # not directly required, pinned by Snyk to avoid a vulnerability
+urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
 dnspython>=2.6.1 # not directly required, pinned by Snyk to avoid a vulnerability
