@@ -86,6 +86,14 @@ export const HeroSection: React.FC = () => {
           <div className="flex flex-wrap gap-[12px] sm:gap-[16px] items-center justify-center">
             <button
               type="button"
+              className="bg-[#FF7A00] text-white hover:bg-[#e96d00] px-[16px] py-[8px] text-[14px] font-lato font-semibold rounded-[6px] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF7A00]"
+              onClick={() => navigate("/report")}
+              aria-label="Report a Hazard"
+            >
+              Report a Hazard
+            </button>
+            <button
+              type="button"
               className="bg-[#0a2a4d] text-white hover:bg-[#0a2a4d]/90 px-[16px] py-[8px] text-[14px] font-lato font-medium rounded-[6px] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0a2a4d]"
               onClick={() => navigate("/map")}
               aria-label="View Live Hazard Map"

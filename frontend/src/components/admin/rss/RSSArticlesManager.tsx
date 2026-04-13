@@ -158,8 +158,8 @@ const columns: ColumnDef<RSSArticle>[] = [
     header: ({ table }) => (
       <Checkbox
         checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && 'indeterminate')
+          table.getIsAllPageRowsSelected() ? true :
+          table.getIsSomePageRowsSelected() ? 'indeterminate' : false
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
@@ -616,10 +616,12 @@ export function RSSArticlesManager() {
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              type="search"
               placeholder="Search articles..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="pl-9"
+              aria-label="Search articles"
             />
           </div>
 
@@ -924,4 +926,3 @@ export function RSSArticlesManager() {
     </div>
   );
 }
-

@@ -76,6 +76,9 @@ const CHART_COLORS = {
   warning: '#f59e0b',
 };
 
+// Success rate threshold for consistent UX across KPI card and system health indicator
+const SUCCESS_RATE_THRESHOLD = 0.8;
+
 // ============================================================================
 // KPI CARD COMPONENT
 // ============================================================================
@@ -317,7 +320,7 @@ export function RSSStatistics() {
           title="Success Rate"
           value={`${((stats.last_24h_success_rate ?? 0) * 100).toFixed(1)}%`}
           icon={<CheckCircle2 className="h-4 w-4" />}
-          trend={(stats.last_24h_success_rate ?? 0) >= 0.9 ? 'up' : 'down'}
+          trend={(stats.last_24h_success_rate ?? 0) >= SUCCESS_RATE_THRESHOLD ? 'up' : 'down'}
           description="Last 24 hours"
         />
         <KPICard
@@ -481,7 +484,7 @@ export function RSSStatistics() {
             <div className="flex items-center gap-3">
               <div
                 className={`w-3 h-3 rounded-full ${
-                  (stats.last_24h_success_rate ?? 0) >= 0.8
+                  (stats.last_24h_success_rate ?? 0) >= SUCCESS_RATE_THRESHOLD
                     ? 'bg-green-500'
                     : 'bg-yellow-500'
                 } animate-pulse`}
@@ -489,7 +492,7 @@ export function RSSStatistics() {
               <div>
                 <p className="text-sm font-medium">AI Classification</p>
                 <p className="text-xs text-muted-foreground">
-                  {(stats.last_24h_success_rate ?? 0) >= 0.8
+                  {(stats.last_24h_success_rate ?? 0) >= SUCCESS_RATE_THRESHOLD
                     ? 'Healthy'
                     : 'Degraded'}
                 </p>

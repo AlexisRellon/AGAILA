@@ -165,6 +165,7 @@ const UserManagement: React.FC = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   const isMasterAdmin = hasRole('master_admin');
+  const canViewUsers = isMasterAdmin || hasRole('validator');
 
   // Create user form
   const createForm = useForm<CreateUserFormData>({
@@ -186,7 +187,7 @@ const UserManagement: React.FC = () => {
   });
 
   // Fetch users using React Query for better caching
-  const { data: usersData, isLoading, refetch } = useQuery({
+  const { data: usersData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin', 'users', { pagination, roleFilter, statusFilter }],
     queryFn: async () => {
       const params: {
@@ -208,11 +209,15 @@ const UserManagement: React.FC = () => {
       // eslint-disable-next-line
       console.log('[UserManagement] Is array?', Array.isArray(response));
       // Backend returns array directly, not wrapped in {users: []}
-      return Array.isArray(response) ? response : [];
+      if (!Array.isArray(response)) {
+        throw new Error('Invalid response format from server');
+      }
+      return response;
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnMount: false, // Don't refetch on component mount if data exists
+    enabled: isMasterAdmin || hasRole('validator'), // Allow validators to view users (read-only)
   });
 
   // Set users from query data
@@ -537,62 +542,79 @@ const UserManagement: React.FC = () => {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
             {isMasterAdmin && (
-              <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create User
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create User
+                </Button>
+              </>
             )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-4">
-          <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by email..."
-              value={(table.getColumn('email')?.getFilterValue() as string) ?? ''}
-              onChange={(event) => table.getColumn('email')?.setFilterValue(event.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="master_admin">Master Admin</SelectItem>
-              <SelectItem value="validator">Validator</SelectItem>
-              <SelectItem value="lgu_responder">LGU Responder</SelectItem>
-              <SelectItem value="citizen">Citizen</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="pending_activation">Pending</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="suspended">Suspended</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Table */}
-        {isLoading ? (
-          <TableSkeleton rows={8} columns={6} />
+        {/* RBAC Guard: Only master admins and validators can view users */}
+        {!canViewUsers ? (
+          <Alert>
+            <Shield className="h-4 w-4" />
+            <AlertDescription>
+              You do not have permission to access user management. This feature is restricted to Master Administrators and Validators.
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
+            {/* Filters */}
+            <div className="flex flex-wrap gap-4 mb-4">
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by email..."
+                  value={(table.getColumn('email')?.getFilterValue() as string) ?? ''}
+                  onChange={(event) => table.getColumn('email')?.setFilterValue(event.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filter by role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="master_admin">Master Admin</SelectItem>
+                  <SelectItem value="validator">Validator</SelectItem>
+                  <SelectItem value="lgu_responder">LGU Responder</SelectItem>
+                  <SelectItem value="citizen">Citizen</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="pending_activation">Pending</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isError ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Failed to load users: {error instanceof Error ? error.message : 'Unknown error occurred'}. Please try again.
+                </AlertDescription>
+              </Alert>
+            ) : isLoading ? (
+              <TableSkeleton rows={8} columns={6} />
+            ) : (
+              <>
             <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
@@ -661,9 +683,16 @@ const UserManagement: React.FC = () => {
             </div>
           </>
         )}
+        </>
+      )}
 
         {/* Create User Dialog */}
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <Dialog open={createDialogOpen} onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) {
+            createForm.reset();
+          }
+        }}>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New User</DialogTitle>
@@ -776,7 +805,10 @@ const UserManagement: React.FC = () => {
                   )}
                 />
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setCreateDialogOpen(false);
+                    createForm.reset();
+                  }}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={createForm.formState.isSubmitting}>

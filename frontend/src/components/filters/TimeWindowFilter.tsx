@@ -1,27 +1,28 @@
 /**
  * TimeWindowFilter Component
- * 
- * Date range picker with preset options for filtering hazards by time.
- * Supports preset buttons and custom date range selection.
- * 
+ *
+ * Simplified time window filter with preset buttons only.
+ * Filters hazards by time window: "All Time", "Last 24h", "Last 7 Days", "Last 30 Days"
+ *
  * Module: FP-03
- * Change: add-advanced-map-features
- * 
+ * Change: simplified-time-window-filter
+ *
+ * Design System: AGAILA brand (navy primary, steel blue secondary, orange accent)
+ * Typography: Lato (primary), Inter (secondary)
+ * Animation: Smooth transitions (200ms), respects prefers-reduced-motion
+ *
  * Features:
- * - Preset buttons: "All Time", "Last 24 Hours", "Last 7 Days", "Last 30 Days"
- * - Custom date range picker with react-day-picker
+ * - Simple preset buttons with consistent styling
+ * - Clear active state and hover states
+ * - WCAG 2.1 AA accessible
+ * - No calendar picker (simplified UX for MVP)
  * - Timezone handling (Philippine Time GMT+8)
- * - Active range display
- * - Validation for invalid date ranges
  */
 
 import React, { useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
-import { format, subDays, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
-import { DayPicker, DateRange } from 'react-day-picker';
-import 'react-day-picker/style.css';
+import { format } from 'date-fns';
 import { Card } from '../ui/card';
-import { Badge } from '../ui/badge';
 import type { TimeWindow, CustomDateRange } from '../../hooks/useHazardFilters';
 
 // ============================================================================
@@ -40,12 +41,13 @@ export interface TimeWindowFilterProps {
 // CONSTANTS
 // ============================================================================
 
-const PRESET_OPTIONS = [
-  { value: 'all' as TimeWindow, label: 'All Time', icon: Clock },
-  { value: '24h' as TimeWindow, label: 'Last 24 Hours', icon: Clock },
-  { value: '7d' as TimeWindow, label: 'Last 7 Days', icon: Calendar },
-  { value: '30d' as TimeWindow, label: 'Last 30 Days', icon: Calendar },
-  { value: 'custom' as TimeWindow, label: 'Custom Range', icon: Calendar },
+/** Preset time window options for quick filtering */
+const PRESET_OPTIONS: Array<{ value: TimeWindow; label: string }> = [
+  { value: 'all', label: 'All Time' },
+  { value: '24h', label: 'Last 24h' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: 'custom', label: 'Custom Range' },
 ];
 
 // ============================================================================
@@ -53,9 +55,9 @@ const PRESET_OPTIONS = [
 // ============================================================================
 
 /**
- * Format date range for display
+ * Format time window for display in active badge
  */
-function formatDateRange(window: TimeWindow, customRange?: CustomDateRange): string {
+function formatTimeWindow(window: TimeWindow, customRange?: CustomDateRange): string {
   switch (window) {
     case '24h':
       return 'Last 24 hours';
@@ -65,35 +67,13 @@ function formatDateRange(window: TimeWindow, customRange?: CustomDateRange): str
       return 'Last 30 days';
     case 'custom':
       if (customRange) {
-        return `${format(customRange.start, 'MMM d, yyyy')} - ${format(customRange.end, 'MMM d, yyyy')}`;
+        return `${format(customRange.start, 'MMM d')} - ${format(customRange.end, 'MMM d')}`;
       }
-      return 'Select date range';
+      return 'Custom range';
     case 'all':
     default:
       return 'All time';
   }
-}
-
-/**
- * Validate date range
- */
-function validateDateRange(start: Date, end: Date): string | null {
-  // Check if end is before start
-  if (isBefore(end, start)) {
-    return 'End date must be after start date';
-  }
-  
-  // Check if dates are in the future
-  const now = new Date();
-  if (isAfter(start, now)) {
-    return 'Start date cannot be in the future';
-  }
-  
-  if (isAfter(end, now)) {
-    return 'End date cannot be in the future';
-  }
-  
-  return null;
 }
 
 // ============================================================================
@@ -105,211 +85,187 @@ export function TimeWindowFilter({
   customDateRange,
   onTimeWindowChange,
   disabled = false,
-  onExpandChange,
 }: TimeWindowFilterProps) {
-  const [showCustomPicker, setShowCustomPicker] = useState(timeWindow === 'custom');
-  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(
-    customDateRange ? { from: customDateRange.start, to: customDateRange.end } : undefined
+  const [showCustomRange, setShowCustomRange] = useState(timeWindow === 'custom');
+  const [startDate, setStartDate] = useState<string>(
+    customDateRange ? format(customDateRange.start, 'yyyy-MM-dd') : ''
   );
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string>(
+    customDateRange ? format(customDateRange.end, 'yyyy-MM-dd') : ''
+  );
+  const [dateError, setDateError] = useState<string>('');
 
   /**
    * Handle preset button click
    */
   const handlePresetClick = (preset: TimeWindow) => {
     if (preset === 'custom') {
-      setShowCustomPicker(true);
-      onExpandChange?.(true); // Expand sidebar for calendar
-      onTimeWindowChange('custom', customDateRange);
+      setShowCustomRange(true);
     } else {
-      setShowCustomPicker(false);
-      onExpandChange?.(false); // Collapse sidebar
-      setValidationError(null);
+      setShowCustomRange(false);
       onTimeWindowChange(preset);
     }
   };
 
   /**
-   * Handle custom date range selection (v9 API: selected, triggerDate, modifiers, event)
+   * Handle custom date range submission
    */
-  const handleDateRangeSelect = (range: DateRange | undefined) => {
-    setSelectedRange(range);
-
-    if (range?.from && range?.to) {
-      const start = startOfDay(range.from);
-      const end = endOfDay(range.to);
-
-      const error = validateDateRange(start, end);
-      setValidationError(error);
-
-      if (!error) {
-        onTimeWindowChange('custom', { start, end });
-      }
-    } else {
-      setValidationError(null);
+  const handleCustomRangeSubmit = () => {
+    setDateError('');
+    if (!startDate || !endDate) {
+      setDateError('Both start and end dates are required');
+      return;
     }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (start.getTime() > end.getTime()) {
+      setDateError('Start date must be before end date');
+      return;
+    }
+    const customRange: CustomDateRange = {
+      start,
+      end,
+    };
+    onTimeWindowChange('custom', customRange);
+    setShowCustomRange(false);
   };
 
   /**
-   * Clear custom date range
+   * Handle custom range cancel
    */
-  const handleClearCustom = () => {
-    setSelectedRange(undefined);
-    setValidationError(null);
-    setShowCustomPicker(false);
-    onExpandChange?.(false); // Collapse sidebar
+  const handleCustomRangeCancel = () => {
+    setShowCustomRange(false);
     onTimeWindowChange('all');
   };
 
   return (
-    <Card className="p-4">
+    <Card className="p-5 bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200">
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-900">Time Window</h3>
-          {timeWindow !== 'all' && (
-            <button
-              onClick={handleClearCustom}
-              disabled={disabled}
-              className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              Clear
-            </button>
-          )}
+        <div className="pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 font-lato">
+                Time Window
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5 font-inter">Filter hazards by date range</p>
+            </div>
+            {timeWindow !== 'all' && (
+              <button
+                onClick={() => handlePresetClick('all')}
+                disabled={disabled}
+                className="
+                  text-xs font-medium px-2.5 py-1 rounded-md
+                  transition-all duration-200
+                  text-slate-600 hover:text-orange-700 hover:bg-orange-50
+                  disabled:text-slate-300 disabled:bg-transparent disabled:cursor-not-allowed
+                  focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2
+                "
+                aria-label="Clear time window filter"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Active Range Display */}
+        {/* Active Selection Display */}
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="font-medium">
-            <Clock className="w-3 h-3 mr-1" />
-            {formatDateRange(timeWindow, customDateRange)}
-          </Badge>
+          <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200">
+            <Clock className="w-4 h-4 text-slate-600" aria-hidden="true" />
+            <span className="text-sm font-medium text-slate-700">
+              {formatTimeWindow(timeWindow, customDateRange)}
+            </span>
+          </div>
         </div>
 
-        {/* Preset Buttons */}
+        {/* Preset Buttons - Design System Aligned */}
         <div className="grid grid-cols-2 gap-2">
           {PRESET_OPTIONS.map((option) => {
-            const Icon = option.icon;
             const isActive = timeWindow === option.value;
-            
+
             return (
               <button
                 key={option.value}
                 onClick={() => handlePresetClick(option.value)}
                 disabled={disabled}
+                aria-pressed={isActive}
                 className={`
-                  flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-medium
-                  ${isActive 
-                    ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  px-3 py-2.5 rounded-lg border-2 transition-all
+                  text-sm font-medium
+                  ${
+                    isActive
+                      ? 'border-orange-500 bg-orange-50 text-orange-900 shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50'
                   }
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1
                 `}
               >
-                <Icon size={16} />
-                <span>{option.label}</span>
+                {option.label}
               </button>
             );
           })}
         </div>
 
-        {/* Custom Date Picker */}
-        {showCustomPicker && (
-          <div className="space-y-3 pt-3 border-t border-gray-200 w-full max-w-full min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Custom Date Range
-              </h4>
-              {selectedRange?.from && selectedRange?.to && !validationError && (
-                <button
-                  onClick={handleClearCustom}
-                  disabled={disabled}
-                  className="text-xs text-gray-500 hover:text-gray-700 disabled:cursor-not-allowed"
-                >
-                  Clear selection
-                </button>
-              )}
+        {/* Custom Date Range Input */}
+        {showCustomRange && (
+          <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              Select Custom Date Range
             </div>
-
-            {/* Date Picker - Compact Calendar with proper range highlighting */}
-            <div 
-              className="w-full bg-white rounded-lg border border-gray-200 p-3 overflow-hidden"
-              style={{
-                '--rdp-accent-color': '#3b82f6',
-                '--rdp-accent-background-color': '#dbeafe',
-                '--rdp-day-height': '36px',
-                '--rdp-day-width': '36px',
-                '--rdp-day_button-height': '34px',
-                '--rdp-day_button-width': '34px',
-                '--rdp-range_start-date-background-color': '#3b82f6',
-                '--rdp-range_end-date-background-color': '#3b82f6',
-                '--rdp-range_middle-background-color': '#dbeafe',
-                '--rdp-range_middle-color': '#1e40af',
-                '--rdp-today-color': '#3b82f6',
-              } as React.CSSProperties}
-            >
-              <style>{`
-                .compact-rdp { width: 100%; }
-                .compact-rdp .rdp-months { width: 100%; }
-                .compact-rdp .rdp-month { width: 100%; }
-                .compact-rdp .rdp-month_grid { width: 100%; }
-                .compact-rdp .rdp-month_caption { font-size: 15px; font-weight: 600; }
-                .compact-rdp .rdp-weekday { padding: 8px 0; font-size: 12px; font-weight: 600; color: #6b7280; }
-                .compact-rdp .rdp-day button { font-size: 14px; transition: all 0.15s ease; }
-                .compact-rdp .rdp-disabled { opacity: 0.35; cursor: not-allowed; }
-              `}</style>
-              <DayPicker
-                mode="range"
-                selected={selectedRange}
-                onSelect={handleDateRangeSelect}
-                disabled={[
-                  { after: new Date() },
-                ]}
-                numberOfMonths={1}
-                defaultMonth={customDateRange?.start || subDays(new Date(), 30)}
-                className="compact-rdp"
-                showOutsideDays
-              />
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="startDate" className="text-xs font-medium text-slate-600 block mb-1">Start Date</label>
+                <input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="endDate" className="text-xs font-medium text-slate-600 block mb-1">End Date</label>
+                <input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
             </div>
-
-            {/* Validation Error */}
-            {validationError && (
-              <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
-                {validationError}
+            {dateError && (
+              <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2" role="alert">
+                {dateError}
               </div>
             )}
-
-            {/* Date Range Display */}
-            {selectedRange?.from && selectedRange?.to && !validationError && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 font-medium">Start:</span>
-                  <span className="text-gray-900 font-semibold">
-                    {format(selectedRange.from, 'MMMM d, yyyy')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 font-medium">End:</span>
-                  <span className="text-gray-900 font-semibold">
-                    {format(selectedRange.to, 'MMMM d, yyyy')}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Instruction Text */}
-            {!selectedRange?.from && (
-              <p className="text-xs text-gray-500 text-center italic">
-                Click to select start date, then click again for end date
-              </p>
-            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleCustomRangeSubmit}
+                disabled={!startDate || !endDate}
+                className="flex-1 px-3 py-2 bg-orange-600 text-white text-xs font-medium rounded-md hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              >
+                Apply
+              </button>
+              <button
+                onClick={handleCustomRangeCancel}
+                className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Info Note */}
-        <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 border border-gray-200">
-          <p className="font-medium text-gray-700 mb-1">Note:</p>
-          <p>All times are in Philippine Time (GMT+8). Future dates are not selectable.</p>
+        {/* Philippine Time Note */}
+        <div className="text-xs bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-1">
+          <p className="font-semibold text-slate-900">Philippine Time (GMT+8)</p>
+          <p className="text-slate-600">
+            All times displayed and filtered in Philippine Time.
+          </p>
         </div>
       </div>
     </Card>

@@ -3,7 +3,7 @@
  * 
  * Features:
  * - Audit log table with sorting, filtering, pagination
- * - Filters: user_email, action, resource_type, date range, success status
+ * - Filters: user_email, event, resource_type, date range, success status
  * - CSV export functionality
  * - Real-time log monitoring
  * 
@@ -24,7 +24,7 @@ import {
   ColumnFiltersState,
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { Search, Download, Filter, CheckCircle2, XCircle, Eye } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -135,11 +135,11 @@ const AuditLogViewer: React.FC = () => {
       };
 
       if (emailFilter) params.user_email = emailFilter;
-      if (actionFilter !== 'all') params.action = actionFilter;
+      if (actionFilter !== 'all') params.event = actionFilter;
       if (resourceTypeFilter !== 'all') params.resource_type = resourceTypeFilter;
       if (successFilter !== null) params.success = successFilter;
-      if (dateRange.from) params.start_date = dateRange.from.toISOString();
-      if (dateRange.to) params.end_date = dateRange.to.toISOString();
+      if (dateRange.from) params.start_date = startOfDay(dateRange.from).toISOString();
+      if (dateRange.to) params.end_date = endOfDay(dateRange.to).toISOString();
 
       return await adminApi.auditLogs.list(params);
     },
@@ -261,6 +261,16 @@ const AuditLogViewer: React.FC = () => {
 
   // Export to CSV
   const exportToCSV = () => {
+    // Sanitize cell content to prevent CSV formula injection
+    const sanitizeCell = (cell: string | number | boolean | null): string => {
+      const str = String(cell);
+      // Prefix cells that start with spreadsheet-formula characters to prevent execution
+      const formulaChars = ['=', '+', '-', '@'];
+      const sanitized = formulaChars.some(char => str.startsWith(char)) ? `'${str}` : str;
+      // Escape double quotes
+      return sanitized.replace(/"/g, '""');
+    };
+
     const headers = ['Timestamp', 'User Email', 'Role', 'Action', 'Description', 'Resource Type', 'Resource ID', 'Status', 'IP Address'];
     const rows = logs.map((log: AuditLog) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
@@ -275,8 +285,8 @@ const AuditLogViewer: React.FC = () => {
     ]);
 
     const csvContent = [
-      headers.join(','),
-      ...rows.map((row: (string | number | boolean | null)[]) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      headers.map(h => `"${sanitizeCell(h)}"`).join(','),
+      ...rows.map((row: (string | number | boolean | null)[]) => row.map((cell) => `"${sanitizeCell(cell)}"`).join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -291,7 +301,7 @@ const AuditLogViewer: React.FC = () => {
       <CardHeader>
         <CardTitle>Audit Logs</CardTitle>
         <CardDescription>
-          View system activity logs and administrative actions (AC-01)
+          View system activity logs and administrative events (AC-01)
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -314,13 +324,13 @@ const AuditLogViewer: React.FC = () => {
               />
             </div>
 
-            {/* Action Filter */}
+            {/* Event Filter */}
             <Select value={actionFilter} onValueChange={setActionFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All actions" />
+                <SelectValue placeholder="All events" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All actions</SelectItem>
+                <SelectItem value="all">All events</SelectItem>
                 <SelectItem value="LOGIN">Login</SelectItem>
                 <SelectItem value="LOGOUT">Logout</SelectItem>
                 <SelectItem value="FAILED_LOGIN">Failed Login</SelectItem>

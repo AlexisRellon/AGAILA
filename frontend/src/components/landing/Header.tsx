@@ -26,6 +26,18 @@ export const Header: React.FC = () => {
         {/* Navigation Buttons */}
         <nav className="flex items-center gap-3 sm:gap-[24px]">
           <Link
+            to="/report"
+            className="bg-[#FF7A00] text-white font-inter font-semibold text-[14px] sm:text-[16px] leading-[1.45] tracking-[-0.08px] px-[12px] sm:px-[16px] py-[8px] sm:py-[12px] rounded-[10px] sm:rounded-[12px] whitespace-nowrap transition-colors hover:bg-[#e96d00]"
+          >
+            Report a Hazard
+          </Link>
+          <Link
+            to="/track"
+            className="font-inter font-medium text-[14px] sm:text-[16px] leading-[1.45] tracking-[-0.08px] text-[#0a2a4d] whitespace-nowrap transition-colors hover:text-[#005a9c]"
+          >
+            Track Report
+          </Link>
+          <Link
             to="/map"
             className="font-inter font-medium text-[14px] sm:text-[16px] leading-[1.45] tracking-[-0.08px] text-[#0a2a4d] whitespace-nowrap transition-colors hover:text-[#005a9c]"
           >

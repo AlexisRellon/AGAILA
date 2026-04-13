@@ -43,6 +43,7 @@ import {
   Shield,
   MapPin,
   LogOut,
+  KeyRound,
   // Home,
   Rss,
 } from 'lucide-react';
@@ -297,6 +298,12 @@ export default function UnifiedDashboard() {
                   <span className="text-sm font-medium">{userProfile?.full_name || 'User'}</span>
                   <span className="text-xs text-muted-foreground">{userProfile?.email}</span>
                 </div>
+                <SidebarMenuButton asChild className="w-full justify-start mb-2">
+                  <Link to="/update-password">
+                    <KeyRound className="h-4 w-4" />
+                    <span>Change Password</span>
+                  </Link>
+                </SidebarMenuButton>
                 <SidebarMenuButton onClick={handleLogout} className="w-full justify-start">
                   <LogOut className="h-4 w-4" />
                   <span>Logout</span>

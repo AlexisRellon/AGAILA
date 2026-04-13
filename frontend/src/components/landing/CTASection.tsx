@@ -19,11 +19,25 @@ export const CTASection: React.FC = () => {
 
         <div className="flex flex-wrap gap-[12px] sm:gap-[16px] items-center justify-center w-full">
           <Link
+            to="/report"
+            aria-label="Report a Hazard"
+            className="bg-accent text-white hover:bg-accent/90 px-[20px] py-[10px] text-[14px] sm:text-[15px] font-lato font-semibold rounded-[8px] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            Report a Hazard
+          </Link>
+          <Link
             to="/map"
             aria-label="View Live Map"
             className="bg-primary text-white hover:bg-primary/90 px-[20px] py-[10px] text-[14px] sm:text-[15px] font-lato font-semibold rounded-[8px] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             View Live Map
+          </Link>
+          <Link
+            to="/track"
+            aria-label="Track Report"
+            className="border border-primary border-solid text-primary hover:bg-primary hover:text-white px-[20px] py-[10px] text-[14px] sm:text-[15px] font-lato font-semibold rounded-[8px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Track Report
           </Link>
           <Link
             to="/login"
