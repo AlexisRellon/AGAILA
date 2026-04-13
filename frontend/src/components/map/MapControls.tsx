@@ -1,24 +1,21 @@
 /**
- * Map Controls Component
+ * Map Controls Component (Redesigned)
  * 
- * Custom control panel for toggling map features:
- * - Marker clustering (GV-03)
- * - Heatmap overlay (GV-04)
- * - Heatmap settings
+ * Modern minimal layer controls for map features.
+ * Follows Eleken Map UI Design Guidelines - minimalist aesthetic.
+ * 
+ * Features:
+ * - Compact horizontal layout (desktop) / icon buttons (mobile)
+ * - Toggle clustering & heatmap with instant visual feedback
+ * - Smart settings panel (collapsible on small screens)
+ * - Accessibility: ARIA labels, keyboard nav, focus management
  * 
  * Module: GV-03, GV-04
- * Change: add-advanced-map-features
- * 
- * Accessibility Features (WCAG 2.1):
- * - ARIA labels and roles for all interactive elements
- * - Keyboard navigation support
- * - High contrast focus indicators
- * - Screen reader announcements for state changes
- * - Reduced motion support
+ * Design: Minimalist + Flat (navy/orange accents)
  */
 
-import React, { useState } from 'react';
-import { Layers, Map as MapIcon, Settings, X, Info } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Layers, Map as MapIcon, Settings, X } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 
@@ -49,10 +46,47 @@ export function MapControls({
   const [localRadius, setLocalRadius] = useState(heatmapRadius);
   const [localBlur, setLocalBlur] = useState(heatmapBlur);
   const [localMaxZoom, setLocalMaxZoom] = useState(heatmapMaxZoom);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
   
   const isHeatmapAutoDisabled = currentZoom > heatmapMaxZoom;
 
-  // Handle slider changes with immediate update
+  // Sync local state with prop updates
+  useEffect(() => {
+    setLocalRadius(heatmapRadius);
+    setLocalBlur(heatmapBlur);
+    setLocalMaxZoom(heatmapMaxZoom);
+  }, [heatmapRadius, heatmapBlur, heatmapMaxZoom]);
+
+  // Close settings when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        settingsPanelRef.current &&
+        !settingsPanelRef.current.contains(e.target as Node) &&
+        settingsButtonRef.current &&
+        !settingsButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowSettings(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSettings(false);
+      }
+    };
+
+    if (showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [showSettings]);
+
   const handleRadiusChange = (value: number) => {
     setLocalRadius(value);
     onHeatmapSettingsChange?.({ radius: value });
@@ -68,162 +102,112 @@ export function MapControls({
     onHeatmapSettingsChange?.({ maxZoom: value });
   };
 
+
   return (
     <div 
-      className="absolute top-44 sm:top-48 right-3 sm:right-4 z-[1000] flex flex-col gap-2 sm:gap-3"
+      className="absolute top-44 sm:top-48 right-3 sm:right-4 z-[1000]"
       role="region"
-      aria-label="Map visualization controls"
+      aria-label="Map layer controls"
     >
-      {/* Main Controls Card */}
-      <Card className="p-3 sm:p-4 bg-white/95 backdrop-blur-sm shadow-lg border border-gray-200 w-[180px] sm:w-[200px]">
-        <div className="flex flex-col gap-3 sm:gap-4">
-          {/* Clustering Toggle */}
-          <div className="flex items-center justify-between gap-2 sm:gap-3" data-tour="cluster-section">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-50 rounded-md">
-                <Layers className="w-4 h-4 text-blue-600" aria-hidden="true" />
-              </div>
-              <span id="clustering-label" className="text-xs sm:text-sm font-medium text-gray-700">
-                Clustering
-              </span>
-            </div>
-            <button
-              type="button"
-              data-tour="cluster-toggle"
-              onClick={() => onToggleClustering(!clusteringEnabled)}
-              className={`
-                relative inline-flex h-6 w-11 items-center rounded-full
-                transition-colors duration-200 motion-reduce:transition-none
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                ${clusteringEnabled ? 'bg-blue-600' : 'bg-gray-300'}
-              `}
-              role="switch"
-              aria-checked={clusteringEnabled}
-              aria-labelledby="clustering-label"
-              aria-describedby="clustering-desc"
-            >
-              <span className="sr-only">
-                {clusteringEnabled ? 'Disable clustering' : 'Enable clustering'}
-              </span>
-              <span
-                aria-hidden="true"
-                className={`
-                  inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 motion-reduce:transition-none
-                  ${clusteringEnabled ? 'translate-x-6' : 'translate-x-1'}
-                `}
-              />
-            </button>
-          </div>
-          <span id="clustering-desc" className="sr-only">
-            Groups nearby hazard markers together for better visibility
-          </span>
+      {/* Main Controls - Compact Card */}
+      <Card className="p-2 sm:p-3 bg-white/95 backdrop-blur-sm shadow-lg border border-gray-200">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Clustering Toggle - Icon Button */}
+          <button
+            type="button"
+            onClick={() => onToggleClustering(!clusteringEnabled)}
+            className={`
+              p-2.5 rounded-lg transition-all duration-200 motion-reduce:transition-none
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+              ${clusteringEnabled 
+                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }
+            `}
+            role="switch"
+            aria-checked={clusteringEnabled}
+            aria-label={`${clusteringEnabled ? 'Disable' : 'Enable'} marker clustering`}
+            title="Clustering"
+          >
+            <Layers className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+          </button>
 
-          {/* Heatmap Toggle */}
-          <div className="flex items-center justify-between gap-2 sm:gap-3" data-tour="heatmap-section">
-            <div className="flex items-center gap-2">
-              <div className={`p-1.5 rounded-md ${isHeatmapAutoDisabled ? 'bg-gray-100' : 'bg-orange-50'}`}>
-                <MapIcon 
-                  className={`w-4 h-4 ${isHeatmapAutoDisabled ? 'text-gray-400' : 'text-orange-600'}`} 
-                  aria-hidden="true" 
-                />
-              </div>
-              <div className="flex flex-col">
-                <span id="heatmap-label" className="text-xs sm:text-sm font-medium text-gray-700">
-                  Heatmap
-                </span>
-                {isHeatmapAutoDisabled && (
-                  <span className="text-[10px] text-amber-600 font-medium">
-                    Zoom out to enable
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              data-tour="heatmap-toggle"
-              onClick={() => onToggleHeatmap(!heatmapEnabled)}
-              disabled={isHeatmapAutoDisabled}
-              className={`
-                relative inline-flex h-6 w-11 items-center rounded-full
-                transition-colors duration-200 motion-reduce:transition-none
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                ${heatmapEnabled && !isHeatmapAutoDisabled ? 'bg-blue-600' : 'bg-gray-300'}
-                ${isHeatmapAutoDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-              `}
-              role="switch"
-              aria-checked={heatmapEnabled && !isHeatmapAutoDisabled}
-              aria-labelledby="heatmap-label"
-              aria-describedby="heatmap-desc"
-              aria-disabled={isHeatmapAutoDisabled}
-            >
-              <span className="sr-only">
-                {heatmapEnabled ? 'Disable heatmap' : 'Enable heatmap'}
-              </span>
-              <span
-                aria-hidden="true"
-                className={`
-                  inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 motion-reduce:transition-none
-                  ${heatmapEnabled && !isHeatmapAutoDisabled ? 'translate-x-6' : 'translate-x-1'}
-                `}
-              />
-            </button>
-          </div>
-          <span id="heatmap-desc" className="sr-only">
-            Shows hazard density visualization. Auto-disables when zoomed in for clarity.
-          </span>
-
-          {/* Divider */}
-          <div className="h-px bg-gray-200" role="separator" aria-hidden="true" />
+          {/* Heatmap Toggle - Icon Button */}
+          <button
+            type="button"
+            onClick={() => onToggleHeatmap(!heatmapEnabled)}
+            disabled={isHeatmapAutoDisabled}
+            className={`
+              p-2.5 rounded-lg transition-all duration-200 motion-reduce:transition-none
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+              ${isHeatmapAutoDisabled
+                ? 'bg-gray-50 text-gray-300 cursor-not-allowed opacity-50'
+                : heatmapEnabled
+                  ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }
+            `}
+            role="switch"
+            aria-checked={heatmapEnabled}
+            aria-label={`${heatmapEnabled ? 'Disable' : 'Enable'} heatmap overlay${isHeatmapAutoDisabled ? ' (zoom out to enable)' : ''}`}
+            aria-disabled={isHeatmapAutoDisabled}
+            title={isHeatmapAutoDisabled ? 'Zoom out to enable' : 'Heatmap'}
+          >
+            <MapIcon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+          </button>
 
           {/* Settings Button */}
           <button
+            ref={settingsButtonRef}
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center justify-between gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 transition-colors py-1 px-2 -mx-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            data-tour="heatmap-settings"
+            className={`
+              p-2.5 rounded-lg transition-all duration-200 motion-reduce:transition-none
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+              ${showSettings ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}
+            `}
             aria-expanded={showSettings}
-            aria-controls="heatmap-settings-panel"
+            aria-controls="heatmap-settings"
+            aria-label="Heatmap settings"
+            title="Settings"
           >
-            <div className="flex items-center gap-2">
-              <Settings className="w-4 h-4" aria-hidden="true" />
-              <span>Settings</span>
-            </div>
-            {showSettings ? (
-              <X className="w-3.5 h-3.5" aria-hidden="true" />
-            ) : (
-              <span className="text-[10px] text-gray-400">▸</span>
-            )}
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
           </button>
         </div>
       </Card>
 
-      {/* Settings Panel */}
+      {/* Settings Panel - Slide down */}
       {showSettings && (
-        <Card 
-          id="heatmap-settings-panel" 
-          className="p-4 bg-white/95 backdrop-blur-sm shadow-lg border border-gray-200 w-[220px] sm:w-[260px]"
+        <div
+          ref={settingsPanelRef}
+          id="heatmap-settings"
+          className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-72 z-50"
           role="dialog"
           aria-label="Heatmap settings"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-800">Heatmap Settings</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Heatmap Settings</h3>
             <button
               type="button"
               onClick={() => setShowSettings(false)}
-              className="p-1 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="p-1 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Close settings"
             >
               <X className="w-4 h-4 text-gray-500" aria-hidden="true" />
             </button>
           </div>
-          
-          <div className="flex flex-col gap-4 text-sm">
+
+          <div className="space-y-4">
             {/* Radius Slider */}
             <div>
-              <label htmlFor="heatmap-radius" className="flex items-center justify-between text-gray-600 mb-2">
-                <span>Radius</span>
-                <Badge variant="secondary" className="text-xs font-mono">{localRadius}px</Badge>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="heatmap-radius" className="text-xs font-medium text-gray-600">
+                  Radius
+                </label>
+                <Badge variant="secondary" className="text-xs font-mono bg-gray-100">
+                  {localRadius}px
+                </Badge>
+              </div>
               <input
                 id="heatmap-radius"
                 type="range"
@@ -231,24 +215,23 @@ export function MapControls({
                 max="50"
                 value={localRadius}
                 onChange={(e) => handleRadiusChange(Number(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 aria-valuenow={localRadius}
                 aria-valuemin={10}
                 aria-valuemax={50}
-                aria-valuetext={`${localRadius} pixels`}
               />
-              <div className="flex justify-between text-[10px] text-gray-400 mt-1" aria-hidden="true">
-                <span>Small</span>
-                <span>Large</span>
-              </div>
             </div>
 
             {/* Blur Slider */}
             <div>
-              <label htmlFor="heatmap-blur" className="flex items-center justify-between text-gray-600 mb-2">
-                <span>Blur</span>
-                <Badge variant="secondary" className="text-xs font-mono">{localBlur}px</Badge>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="heatmap-blur" className="text-xs font-medium text-gray-600">
+                  Blur
+                </label>
+                <Badge variant="secondary" className="text-xs font-mono bg-gray-100">
+                  {localBlur}px
+                </Badge>
+              </div>
               <input
                 id="heatmap-blur"
                 type="range"
@@ -256,24 +239,23 @@ export function MapControls({
                 max="30"
                 value={localBlur}
                 onChange={(e) => handleBlurChange(Number(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 aria-valuenow={localBlur}
                 aria-valuemin={5}
                 aria-valuemax={30}
-                aria-valuetext={`${localBlur} pixels blur`}
               />
-              <div className="flex justify-between text-[10px] text-gray-400 mt-1" aria-hidden="true">
-                <span>Sharp</span>
-                <span>Soft</span>
-              </div>
             </div>
 
             {/* Max Zoom Slider */}
             <div>
-              <label htmlFor="heatmap-maxzoom" className="flex items-center justify-between text-gray-600 mb-2">
-                <span>Max Zoom</span>
-                <Badge variant="secondary" className="text-xs font-mono">Level {localMaxZoom}</Badge>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="heatmap-maxzoom" className="text-xs font-medium text-gray-600">
+                  Auto-disable at zoom
+                </label>
+                <Badge variant="secondary" className="text-xs font-mono bg-gray-100">
+                  {localMaxZoom}+
+                </Badge>
+              </div>
               <input
                 id="heatmap-maxzoom"
                 type="range"
@@ -281,27 +263,24 @@ export function MapControls({
                 max="15"
                 value={localMaxZoom}
                 onChange={(e) => handleMaxZoomChange(Number(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 aria-valuenow={localMaxZoom}
                 aria-valuemin={8}
                 aria-valuemax={15}
-                aria-valuetext={`Zoom level ${localMaxZoom}`}
               />
-              <div className="flex justify-between text-[10px] text-gray-400 mt-1" aria-hidden="true">
-                <span>8</span>
-                <span>15</span>
-              </div>
-            </div>
-
-            {/* Info Box */}
-            <div className="pt-3 border-t border-gray-200">
-              <div className="flex items-start gap-2 text-xs text-gray-500 bg-blue-50 p-2 rounded-md">
-                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" aria-hidden="true" />
-                <p>Changes apply immediately. Settings are saved in your browser.</p>
-              </div>
             </div>
           </div>
-        </Card>
+
+          {/* Current Zoom Indicator */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-600">
+              <span className="font-medium">Current zoom:</span> Level {Math.round(currentZoom)}
+              {isHeatmapAutoDisabled && (
+                <span className="ml-2 text-amber-600 font-medium">(Heatmap disabled)</span>
+              )}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
