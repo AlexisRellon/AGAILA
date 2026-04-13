@@ -70,6 +70,7 @@ const SystemConfig: React.FC = () => {
   const [selectedConfig, setSelectedConfig] = useState<SystemConfig | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | null>(null);
 
   const form = useForm<z.infer<typeof updateConfigSchema>>({
     resolver: zodResolver(updateConfigSchema),
@@ -78,12 +79,50 @@ const SystemConfig: React.FC = () => {
     },
   });
 
+  // Inline validation function
+  const validateValue = (value: string, config: SystemConfig): boolean => {
+    // Trim and check for empty values first
+    const trimmedValue = value.trim();
+    if (trimmedValue === '') {
+      setValidationStatus('invalid');
+      return false;
+    }
+
+    // Type-specific validation
+    if (config.value_type === 'boolean') {
+      const isValid = trimmedValue === 'true' || trimmedValue === 'false';
+      setValidationStatus(isValid ? 'valid' : 'invalid');
+      return isValid;
+    }
+
+    if (config.value_type === 'number') {
+      const numValue = parseFloat(trimmedValue);
+      if (isNaN(numValue)) {
+        setValidationStatus('invalid');
+        return false;
+      }
+      if (config.min_value !== null && numValue < config.min_value) {
+        setValidationStatus('invalid');
+        return false;
+      }
+      if (config.max_value !== null && numValue > config.max_value) {
+        setValidationStatus('invalid');
+        return false;
+      }
+    }
+
+    setValidationStatus('valid');
+    return true;
+  };
+
 
 
   // Open edit dialog
   const handleEdit = (config: SystemConfig) => {
     setSelectedConfig(config);
     form.reset({ config_value: config.config_value });
+    // Validate the initial value
+    validateValue(config.config_value, config);
     setIsEditDialogOpen(true);
   };
 
@@ -233,7 +272,15 @@ const SystemConfig: React.FC = () => {
         </div>
 
         {/* Edit Configuration Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <Dialog
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) {
+              setValidationStatus(null);
+            }
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Configuration</DialogTitle>
@@ -266,6 +313,17 @@ const SystemConfig: React.FC = () => {
                             {...field}
                             placeholder={`Enter ${selectedConfig.value_type} value`}
                             type={selectedConfig.value_type === 'number' ? 'number' : 'text'}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              validateValue(e.target.value, selectedConfig);
+                            }}
+                            className={
+                              validationStatus === 'invalid'
+                                ? 'border-red-500 focus-visible:ring-red-500'
+                                : validationStatus === 'valid'
+                                ? 'border-green-500 focus-visible:ring-green-500'
+                                : ''
+                            }
                           />
                         </FormControl>
                         {selectedConfig.value_type === 'number' && (
@@ -301,7 +359,7 @@ const SystemConfig: React.FC = () => {
                       <X className="mr-2 h-4 w-4" />
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isSaving}>
+                    <Button type="submit" disabled={isSaving || validationStatus === 'invalid'}>
                       <Save className="mr-2 h-4 w-4" />
                       {isSaving ? 'Saving...' : 'Save Changes'}
                     </Button>

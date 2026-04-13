@@ -132,7 +132,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
     
     // Hazard types
     if (filters.hazardTypes && filters.hazardTypes.length > 0) {
-      parts.push(`Types: ${filters.hazardTypes.map(t => t.replace('_', ' ')).join(', ')}`);
+      parts.push(`Types: ${filters.hazardTypes.map(t => t.replaceAll('_', ' ')).join(', ')}`);
     }
     
     // Time window
@@ -148,7 +148,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
     
     // Source types
     if (filters.sourceTypes && filters.sourceTypes.length > 0) {
-      parts.push(`Sources: ${filters.sourceTypes.map(s => s.replace('_', ' ')).join(', ')}`);
+      parts.push(`Sources: ${filters.sourceTypes.map(s => s.replaceAll('_', ' ')).join(', ')}`);
     }
     
     // Severities
@@ -273,9 +273,18 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
 
       // Step 4: Download PDF
       const blob = await response.blob();
+
+      // Validate Content-Type to ensure it's a PDF before proceeding
+      if (!blob.type.includes('pdf')) {
+        throw new Error('Invalid response type: expected PDF');
+      }
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
+
+      link.style.display = 'none';
+      link.style.visibility = 'hidden';
       
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       // Sanitize filename to prevent XSS and path traversal

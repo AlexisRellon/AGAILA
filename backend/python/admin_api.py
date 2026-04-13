@@ -587,6 +587,7 @@ async def reset_user_password(
 @router.get("/audit-logs", response_model=List[AuditLogResponse])
 async def get_audit_logs(
     user_email: Optional[str] = Query(None, description="Filter by user email"),
+    event: Optional[str] = Query(None, description="Filter by event type"),
     action: Optional[str] = Query(None, description="Filter by action type"),
     resource_type: Optional[str] = Query(None, description="Filter by resource type"),
     start_date: Optional[str] = Query(None, description="Filter by start date (ISO format)"),
@@ -608,7 +609,10 @@ async def get_audit_logs(
         
         if user_email:
             query = query.ilike("user_email", f"%{user_email}%")
-        if action:
+        # Prefer event-based filtering, keep action as backward-compatible alias.
+        if event:
+            query = query.eq("action", event)
+        elif action:
             query = query.eq("action", action)
         if resource_type:
             query = query.eq("resource_type", resource_type)
@@ -754,12 +758,13 @@ async def get_triage_queue(
     **Note**: Valid status values are: unverified, verified, rejected, duplicate
     """
     try:
-        # Build query for unvalidated reports (validated_by is NULL means not yet validated)
-        query = supabase.schema("gaia").from_("citizen_reports").select("*").is_("validated_by", None)
+        query = supabase.schema("gaia").from_("citizen_reports").select("*")
         
-        # Only filter by status if provided (default is "unverified")
+        # Keep default behavior focused on unverified queue.
         if status_filter:
             query = query.eq("status", status_filter)
+        if status_filter == "unverified":
+            query = query.is_("validated_by", None)
         if hazard_type:
             query = query.eq("hazard_type", hazard_type)
         if min_confidence is not None:

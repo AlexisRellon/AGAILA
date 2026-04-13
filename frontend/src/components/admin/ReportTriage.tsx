@@ -4,7 +4,7 @@
  * Features:
  * - View unverified citizen reports with confidence scores
  * - Filters: status, hazard_type, min/max confidence
- * - Validate or reject reports with notes
+ * - Approve or reject reports with notes
  * - Preview report location (coordinates display)
  * 
  * Module: AC-04 (Unverified Report Triage)
@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import { Shield, CheckCircle, XCircle, MapPin, AlertCircle, Image as ImageIcon, User, Phone } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+
 import 'leaflet/dist/leaflet.css';
 import { HazardIcon, getHazardIcon } from '../../constants/hazard-icons';
 
@@ -469,7 +470,7 @@ const ReportTriage: React.FC = () => {
             className="text-green-600 hover:text-green-700 hover:bg-green-50"
           >
             <CheckCircle className="h-4 w-4 mr-1" />
-            Validate
+            Approve
           </Button>
           <Button
             variant="outline"
@@ -592,7 +593,7 @@ const ReportTriage: React.FC = () => {
           Report Triage
         </CardTitle>
         <CardDescription>
-          Validate or reject unverified citizen reports (AC-04)
+          Approve or reject unverified citizen reports (AC-04)
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -664,7 +665,7 @@ const ReportTriage: React.FC = () => {
         {/* Pagination */}
         <div className="flex flex-wrap items-center justify-between gap-2 my-4">
           <div className="text-sm text-muted-foreground">
-            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+            Showing {reports.length === 0 ? 0 : table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
             {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, reports.length)} of{' '}
             {reports.length} reports
           </div>
@@ -753,7 +754,7 @@ const ReportTriage: React.FC = () => {
         {/* Pagination */}
         <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
           <div className="text-sm text-muted-foreground">
-            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+            Showing {reports.length === 0 ? 0 : table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
             {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, reports.length)} of{' '}
             {reports.length} reports
           </div>
@@ -785,11 +786,11 @@ const ReportTriage: React.FC = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {actionType === 'validate' ? 'Validate Report' : 'Reject Report'}
+                {actionType === 'validate' ? 'Approve Report' : 'Reject Report'}
               </DialogTitle>
               <DialogDescription>
                 {actionType === 'validate'
-                  ? 'Confirm this report as verified and add it to the hazard map.'
+                  ? 'Approve this report as verified and add it to the hazard map.'
                   : 'Reject this report and mark it as invalid.'}
               </DialogDescription>
             </DialogHeader>
@@ -1037,7 +1038,7 @@ const ReportTriage: React.FC = () => {
                 disabled={isProcessing || (actionType === 'validate' && Boolean(coordinateError)) || (actionType === 'reject' && !rejectionReason.trim())}
                 variant={actionType === 'validate' ? 'default' : 'destructive'}
               >
-                {isProcessing ? 'Processing...' : actionType === 'validate' ? 'Confirm Validation' : 'Confirm Rejection'}
+                {isProcessing ? 'Processing...' : actionType === 'validate' ? 'Confirm Approval' : 'Confirm Rejection'}
               </Button>
             </DialogFooter>
           </DialogContent>

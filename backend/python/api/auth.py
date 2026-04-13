@@ -50,11 +50,12 @@ async def check_email_exists(request: Request, response: Response, body: CheckEm
     Rate-limited to 5 requests/minute to mitigate enumeration abuse.
     """
     try:
+        normalized_email = body.email.strip().lower()
         result = (
             supabase.schema("gaia")
             .from_("user_profiles")
             .select("id")
-            .eq("email", body.email)
+            .eq("email", normalized_email)
             .execute()
         )
 

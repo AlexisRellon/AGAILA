@@ -309,8 +309,8 @@ async def submit_citizen_report(
     if image and image.filename:
         try:
             # Security: Validate file type and extension
-            ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
-            ALLOWED_MIME_TYPES = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'}
+            ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif', 'heic', 'heif'}
+            ALLOWED_MIME_TYPES = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/jfif', 'image/heic', 'image/heif'}
             
             # Validate MIME type
             if image.content_type and image.content_type not in ALLOWED_MIME_TYPES:
@@ -437,10 +437,7 @@ async def submit_citizen_report(
         logger.info("Encrypting PII fields for storage")
         report_data = encrypt_pii_fields(report_data)
         
-        result = supabase.schema("gaia").from_("citizen_reports").insert(report_data).execute()
-        
-        if not result.data:
-            raise Exception("Database insert failed - no data returned")
+        supabase.schema("gaia").from_("citizen_reports").insert(report_data).execute()
         
         logger.info(f"Citizen report created: {tracking_id} (PII encrypted)")
         # Log public submission activity (anonymous user)
@@ -480,7 +477,7 @@ async def submit_citizen_report(
         return ReportSubmissionResponse(
             tracking_id=tracking_id,
             message="Thank you for your report! It will be reviewed by authorities.",
-            status="pending_verification",
+            status="unverified",
             submitted_at=datetime.utcnow()
         )
         

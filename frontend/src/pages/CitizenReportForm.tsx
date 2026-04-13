@@ -398,6 +398,11 @@ const CitizenReportForm: React.FC = () => {
             Help your community by reporting environmental hazards you&apos;ve witnessed.
             All reports are reviewed by local authorities.
           </p>
+          <p className="mt-3 text-sm">
+            <Link to="/track" className="text-[#005a9c] font-semibold hover:underline">
+              Track an existing report
+            </Link>
+          </p>
         </div>
 
         {/* Form Container */}

@@ -186,12 +186,17 @@ function parseFiltersFromURL(searchParams: URLSearchParams): Partial<FilterState
 
 /**
  * Serialize filters to URL query parameters
+ * 
+ * NOTE: URL serialization distinguishes between "no filter applied" and "all options selected":
+ * - When user selects ALL options for a multi-select filter, we omit it from the URL
+ * - This treats "all selected" as equivalent to "no filter", reducing URL clutter
+ * - The activeFilterCount (separately) will still count explicit user selections
  */
 function serializeFiltersToURL(filters: FilterState): URLSearchParams {
   const params = new URLSearchParams();
   
-  // Add hazard types
-  if (filters.hazardTypes.length > 0) {
+  // Add hazard types (all hazard types omitted from URL for consistency)
+  if (filters.hazardTypes.length > 0 && filters.hazardTypes.length < ALL_HAZARD_TYPES.length) {
     params.set('types', filters.hazardTypes.join(','));
   }
   
@@ -213,12 +218,12 @@ function serializeFiltersToURL(filters: FilterState): URLSearchParams {
     params.set('end', formatLocalDate(filters.customDateRange.end));
   }
   
-  // Add source types
+  // Add source types (all 3 sources omitted from URL - equivalent to no filter)
   if (filters.sourceTypes.length > 0 && filters.sourceTypes.length < 3) {
     params.set('source', filters.sourceTypes.join(','));
   }
   
-  // Add severities
+  // Add severities (all severity levels omitted from URL for consistency)
   if (filters.severities.length > 0 && filters.severities.length < ALL_SEVERITIES.length) {
     params.set('severity', filters.severities.join(','));
   }
@@ -387,6 +392,15 @@ export function useHazardFilters() {
 
   /**
    * Count active filters
+   * 
+   * NOTE: This counts explicit user selections REGARDLESS of whether all options are selected.
+   * Unlike URL serialization (which omits "all selected" to reduce clutter), we COUNT all
+   * explicit selections so the badge correctly shows "X filters applied".
+   * 
+   * For example:
+   * - User selects 2 severities → activeFilterCount includes it
+   * - User selects ALL 3 severities → activeFilterCount includes it
+   * - User selects 0 severities → activeFilterCount skips it
    */
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -394,7 +408,7 @@ export function useHazardFilters() {
     if (filters.hazardTypes.length > 0) count++;
     if (filters.severities.length > 0) count++;
     if (filters.timeWindow !== 'all') count++;
-    if (filters.sourceTypes.length > 0 && filters.sourceTypes.length < 3) count++;
+    if (filters.sourceTypes.length > 0) count++;
     
     return count;
   }, [filters]);

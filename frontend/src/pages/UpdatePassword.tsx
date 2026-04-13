@@ -20,24 +20,61 @@ const UpdatePassword: React.FC = () => {
   const [validatingToken, setValidatingToken] = useState(true);
 
   useEffect(() => {
+    let active = true;
+
     const checkSession = async () => {
       try {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const searchParams = new URLSearchParams(window.location.search);
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const code = searchParams.get('code') || hashParams.get('code');
+
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
+        } else if (accessToken && refreshToken) {
+          const { error: setSessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (setSessionError) throw setSessionError;
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
-        
         if (error) throw error;
-        
+
         if (!session) {
-          navigate('/reset-password');
+          navigate('/reset-password', { replace: true });
           return;
         }
-        
-        setValidatingToken(false);
+
+        if (active) {
+          setValidatingToken(false);
+        }
       } catch {
-        navigate('/reset-password');
+        navigate('/reset-password', { replace: true });
       }
     };
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setValidatingToken(false);
+      }
+
+      if (event === 'SIGNED_OUT') {
+        navigate('/reset-password', { replace: true });
+      }
+    });
+
     checkSession();
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {

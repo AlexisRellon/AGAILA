@@ -99,10 +99,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         if (!mounted) return;
         
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AuthContext] Auth state change:', event);
-        }
-        
         setUser(session?.user ?? null);
         
         // Invalidate queries on auth change
@@ -133,6 +129,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const profileChannel = supabase
+      .channel(`auth-profile-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'gaia',
+          table: 'user_profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        async () => {
+          await queryClient.invalidateQueries({ queryKey: queryKeys.auth.profile(user.id) });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileChannel);
+    };
+  }, [user?.id, queryClient]);
 
   // Activity tracking
   useEffect(() => {

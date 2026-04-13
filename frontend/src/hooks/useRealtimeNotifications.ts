@@ -56,6 +56,63 @@ export function useRealtimeHazards() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const lastSeenRef = useRef<string | null>(null);
+  const seenAlertsRef = useRef<Set<string>>(new Set());
+
+  const notifyBrowser = useCallback((hazard: { id: string; hazard_type: string; location_name: string; severity?: string }) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const notification = new Notification(`High severity ${hazard.hazard_type} detected`, {
+      body: `${hazard.location_name} (${(hazard.severity || 'unknown').toUpperCase()})`,
+      tag: `hazard-${hazard.id}`,
+    });
+
+    notification.onclick = () => {
+      window.location.href = `/map?hazard=${hazard.id}`;
+    };
+  }, []);
+
+  const emitHazardAlert = useCallback((hazard: {
+    id: string;
+    hazard_type: string;
+    location_name: string;
+    severity?: string;
+    source_type?: string;
+    created_at?: string;
+  }) => {
+    const isHighSeverity = (severity?: string) =>
+      severity?.toLowerCase() === 'high' || severity?.toLowerCase() === 'critical';
+
+    const alertKey = `${hazard.id}:${hazard.created_at || ''}`;
+    if (seenAlertsRef.current.has(alertKey)) return;
+    seenAlertsRef.current.add(alertKey);
+
+    const normalizedSeverity = (hazard.severity || 'unknown').toLowerCase();
+    const shouldEscalate = isHighSeverity(normalizedSeverity);
+
+    addNotification({
+      type: 'hazard',
+      severity: shouldEscalate ? 'error' : 'warning',
+      title: `New ${hazard.hazard_type} detected`,
+      message: `${hazard.location_name} - Severity: ${normalizedSeverity.toUpperCase()}`,
+      link: `/map?hazard=${hazard.id}`,
+      metadata: { hazardId: hazard.id, hazardType: hazard.hazard_type }
+    });
+
+    if (!shouldEscalate) return;
+
+    toast.warning(`New ${hazard.hazard_type} detected in ${hazard.location_name}`, {
+      description: `Severity: ${normalizedSeverity.toUpperCase()} | Source: ${hazard.source_type === 'rss' ? 'News Feed' : 'Citizen Report'}`,
+      duration: 8000,
+      action: {
+        label: 'View on Map',
+        onClick: () => {
+          window.location.href = `/map?hazard=${hazard.id}`;
+        }
+      }
+    });
+    notifyBrowser(hazard);
+  }, [addNotification, notifyBrowser]);
 
   useEffect(() => {
     // Prevent duplicate subscriptions
@@ -89,14 +146,13 @@ export function useRealtimeHazards() {
               const h = data[i];
               if (!h.created_at) continue;
               if (h.created_at > (lastSeenRef.current || '')) {
-                const severity = h.severity || 'unknown';
-                addNotification({
-                  type: 'hazard',
-                  severity: severity === 'critical' || severity === 'high' ? 'error' : 'warning',
-                  title: `New ${h.hazard_type} detected`,
-                  message: `${h.location_name} - Severity: ${severity.toUpperCase()}`,
-                  link: `/map?hazard=${h.id}`,
-                  metadata: { hazardId: h.id, hazardType: h.hazard_type }
+                emitHazardAlert({
+                  id: h.id,
+                  hazard_type: h.hazard_type,
+                  location_name: h.location_name,
+                  severity: h.severity ?? undefined,
+                  source_type: h.source_type,
+                  created_at: h.created_at,
                 });
               }
             }
@@ -144,30 +200,7 @@ export function useRealtimeHazards() {
 
               console.log('[Realtime] New hazard:', hazard);
 
-            // Add to notification store
-            addNotification({
-              type: 'hazard',
-              severity: hazard.severity === 'critical' || hazard.severity === 'high' ? 'error' : 'warning',
-              title: `New ${hazard.hazard_type} detected`,
-              message: `${hazard.location_name} - Severity: ${hazard.severity.toUpperCase()}`,
-              link: `/map?hazard=${hazard.id}`,
-              metadata: { hazardId: hazard.id, hazardType: hazard.hazard_type }
-            });
-
-            // Show toast notification
-            toast.success(
-              `New ${hazard.hazard_type} detected in ${hazard.location_name}`,
-              {
-                description: `Severity: ${hazard.severity.toUpperCase()} | Source: ${hazard.source_type === 'rss' ? 'News Feed' : 'Citizen Report'}`,
-                duration: 8000,
-                action: {
-                  label: 'View on Map',
-                  onClick: () => {
-                    window.location.href = `/map?hazard=${hazard.id}`;
-                  }
-                }
-              }
-            );
+            emitHazardAlert(hazard);
 
             // Invalidate queries to refresh UI
             queryClient.invalidateQueries({ queryKey: ['hazards'] });
@@ -260,7 +293,7 @@ export function useRealtimeHazards() {
         channelRef.current = null;
       }
     };
-  }, [queryClient, addNotification]);
+  }, [queryClient, addNotification, emitHazardAlert]);
 }
 
 /**
@@ -436,4 +469,22 @@ export function useTestRealtimeNotification() {
   }, [queryClient]);
 
   return { triggerTestNotification };
+}
+
+/**
+ * Request browser notification permission
+ * Should be called from an explicit user gesture (e.g., button click)
+ */
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'denied';
+  }
+  
+  try {
+    return await Notification.requestPermission();
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to request notification permission:', error);
+    return 'denied';
+  }
 }

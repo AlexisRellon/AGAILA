@@ -46,6 +46,12 @@ export interface HazardTypeDistribution {
   percentage: number;
 }
 
+export interface SourceBreakdown {
+  source_type: string;
+  count: number;
+  percentage: number;
+}
+
 export interface RecentAlert {
   id: string;
   hazard_type: string;
@@ -92,6 +98,14 @@ class AnalyticsAPI {
     const response = await fetch(`${this.baseUrl}/distribution`);
     if (!response.ok) {
       throw new Error(`Failed to fetch distribution: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async getSourceBreakdown(): Promise<SourceBreakdown[]> {
+    const response = await fetch(`${this.baseUrl}/source-breakdown`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch source breakdown: ${response.statusText}`);
     }
     return response.json();
   }

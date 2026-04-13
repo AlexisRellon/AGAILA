@@ -4,7 +4,7 @@
  * 
  * Features:
  * - Drag-and-drop file upload
- * - File type validation (JPEG/PNG only)
+ * - File type validation (JPEG/PNG/JFIF/HEIC/HEIF)
  * - File size validation (<5MB)
  * - Image preview with remove button
  * - EXIF metadata extraction (GPS, timestamp, device info)
@@ -39,7 +39,8 @@ interface ImageMetadata {
 // ============================================================================
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/heic', 'image/heif'];
+const HEIC_HEIF_TYPES = ['image/heic', 'image/heif'];
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -156,7 +157,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
   const validateFile = (file: File): string | null => {
     // Check file type
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return 'Only JPEG and PNG images are allowed';
+      return 'Only JPEG, PNG, JFIF, HEIC, and HEIF images are allowed';
     }
 
     // Check file size
@@ -180,6 +181,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
     if (validationError) {
       setError(validationError);
       return;
+    }
+
+    // Warn about HEIC/HEIF support limitations
+    if (HEIC_HEIF_TYPES.includes(file.type)) {
+      setError('HEIC/HEIF images may not preview in all browsers. Please use JPEG or PNG for best compatibility.');
     }
 
     // Create preview URL
@@ -362,7 +368,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
         <input
           ref={fileInputRef}
           type="file"
-          accept={ALLOWED_TYPES.join(',')}
+          accept={`${ALLOWED_TYPES.join(',')},.jfif,.heic,.heif`}
           onChange={handleInputChange}
           disabled={disabled}
           className="hidden"

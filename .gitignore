@@ -124,3 +124,5 @@ QUICK_TEST_GUIDE*.md
 /.github/prompts/ui-ux-pro-max
 /.github/skills
 /.agents
+/.worktrees/
+/worktrees/

@@ -291,7 +291,7 @@ export default function ActivityMonitor() {
         <PaginationControls table={table} totalLogs={logs.length} />
       </CardContent>
 
-      <Dialog open={detailsDialog.open} onOpenChange={(open) => setDetailsDialog({ open, log: null })}>
+      <Dialog open={detailsDialog.open} onOpenChange={(open) => setDetailsDialog(prev => ({ open, log: prev.log }))}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Activity Log Details</DialogTitle>

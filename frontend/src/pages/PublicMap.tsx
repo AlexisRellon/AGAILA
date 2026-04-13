@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, LayersControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, ZoomControl, ScaleControl, LayersControl, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
 import { fetchValidatedHazards, HazardResponse } from '../services/hazardsApi';
@@ -10,7 +10,9 @@ import { Alert } from '../components/ui/alert';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { createCustomClusterIcon } from '../components/map/clusterIcon';
+import { getHazardMarkerIcon } from '../components/map/hazardMarkerIcon';
 import { HeatmapLayer, useHeatmapSettings } from '../components/map/HeatmapLayer';
+import { HazardInfoPanel } from '../components/map/HazardInfoPanel';
 import { MapOnboarding } from '../components/map/MapOnboarding';
 import { FilterPanel } from '../components/filters/FilterPanel';
 import { BoundaryLayer } from '../components/map/BoundaryLayer';
@@ -56,9 +58,13 @@ interface Hazard {
   longitude: number;
   confidence_score: number;
   source_type: string;
+  source_url?: string;
+  source_title?: string;
   validated: boolean;
   created_at: string;
   source_content?: string;
+  validated_at?: string;
+  validated_by?: string;
 }
 
 /**
@@ -74,9 +80,13 @@ function mapResponseToHazard(response: HazardResponse): Hazard {
     longitude: response.longitude,
     confidence_score: response.confidence_score,
     source_type: response.source_type,
+    source_url: response.source_url || undefined,
+    source_title: response.source_title || undefined,
+    source_content: response.source_content || undefined,
     validated: response.validated,
     created_at: response.created_at,
-    source_content: response.source_content || undefined,
+    validated_at: response.validated_at || undefined,
+    validated_by: response.validated_by || undefined,
   };
 }
 
@@ -96,12 +106,7 @@ interface NominatimResult {
   };
 }
 
-const severityColors: Record<string, string> = {
-  critical: 'bg-red-500',
-  severe: 'bg-orange-500',
-  moderate: 'bg-yellow-500',
-  minor: 'bg-green-500',
-};
+// Severity colors now defined in HazardInfoPanel component
 
 /**
  * PublicMap Component
@@ -134,15 +139,150 @@ const severityColors: Record<string, string> = {
  * - Keyboard navigation for all interactive elements
  * - Reduced motion support
  */
+
+/**
+ * SearchController - Module-scope component to control map from selected location
+ * Flies to the selected search result and fits bounds if available
+ * Placed at module scope to maintain persistent refs across PublicMap re-renders (GV-01)
+ */
+const SearchController: React.FC<{ 
+  location: { lat: number; lon: number } | null;
+  bounds: L.LatLngBoundsExpression | null;
+  boundaryLevel: string | null;
+  isFollowing: boolean;
+  onStopFollowing: () => void;
+}> = ({ location, bounds, boundaryLevel, isFollowing, onStopFollowing }) => {
+  const map = useMap();
+  const previousLocationRef = useRef<{ lat: number; lon: number } | null>(null);
+  const hasFlownRef = useRef(false);
+
+  useEffect(() => {
+    // Only fly to location if following is enabled
+    if (isFollowing && location && 
+        (!previousLocationRef.current || 
+         previousLocationRef.current.lat !== location.lat || 
+         previousLocationRef.current.lon !== location.lon ||
+         !hasFlownRef.current)) {
+      
+      // If we have boundary bounds, use fitBounds for better UX
+      if (bounds) {
+        // Adaptive padding based on boundary level
+        const paddingOptions: { [key: string]: [number, number] } = {
+          municipality: [50, 50],
+          province: [30, 30],
+          region: [20, 20],
+          default: [40, 40]
+        };
+        
+        const padding = paddingOptions[boundaryLevel as keyof typeof paddingOptions] || paddingOptions.default;
+        
+        map.fitBounds(bounds, {
+          padding,
+          animate: true,
+          duration: 1.5
+        });
+      } else {
+        // Fallback to flyTo with fixed zoom if no bounds available
+        map.flyTo([location.lat, location.lon], 15, {
+          duration: 1.5
+        });
+      }
+      
+      // Update the ref to track this location
+      previousLocationRef.current = location;
+      hasFlownRef.current = true;
+    }
+  }, [location, bounds, boundaryLevel, map, isFollowing]);
+
+  // Detect user interaction (drag, zoom) to auto-disable following
+  useEffect(() => {
+    if (!isFollowing) return;
+
+    const handleUserInteraction = () => {
+      // Only disable following if user manually moved the map
+      // (not during the initial flyTo animation)
+      if (hasFlownRef.current) {
+        onStopFollowing();
+      }
+    };
+
+    // Listen for map drag and zoom events
+    map.on('dragstart', handleUserInteraction);
+    map.on('zoomstart', handleUserInteraction);
+
+    return () => {
+      map.off('dragstart', handleUserInteraction);
+      map.off('zoomstart', handleUserInteraction);
+    };
+  }, [map, isFollowing, onStopFollowing]);
+
+  // Reset hasFlownRef when location changes
+  useEffect(() => {
+    if (location && previousLocationRef.current && 
+        (previousLocationRef.current.lat !== location.lat || 
+         previousLocationRef.current.lon !== location.lon)) {
+      hasFlownRef.current = false;
+    }
+  }, [location]);
+
+  return null;
+};
+
+/**
+ * ZoomTracker - Module-scope component to track current zoom level
+ * Updates zoom level for heatmap auto-disable feature
+ * Placed at module scope to maintain persistent refs across PublicMap re-renders (GV-04)
+ */
+const ZoomTracker: React.FC<{ onZoomChange: (zoom: number) => void }> = ({ onZoomChange }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const updateZoom = () => {
+      onZoomChange(map.getZoom());
+    };
+
+    // Set initial zoom
+    updateZoom();
+
+    // Listen for zoom changes
+    map.on('zoomend', updateZoom);
+
+    return () => {
+      map.off('zoomend', updateZoom);
+    };
+  }, [map, onZoomChange]);
+
+  return null;
+};
+
+/**
+ * MapInstanceSetter - Module-scope component to capture Leaflet map instance
+ * Stores the map instance in a ref for external component access (e.g., HazardInfoPanel zoom)
+ * Placed at module scope to persist across PublicMap re-renders
+ */
+const MapInstanceSetter: React.FC<{ mapRef: React.MutableRefObject<L.Map | null> }> = ({ mapRef }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map, mapRef]);
+  
+  return null;
+};
+
 const PublicMap: React.FC = () => {
   const { user } = useAuth(); // Get authenticated user
   const [hazards, setHazards] = useState<Hazard[]>([]);
+  const [selectedHazard, setSelectedHazard] = useState<Hazard | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isLegendVisible, setIsLegendVisible] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [showSettings, setShowSettings] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
+  
+  // Map instance ref for accessing Leaflet map methods
+  const mapInstanceRef = useRef<L.Map | null>(null);
   
   // Accessibility: Live region announcements
   const [announcement, setAnnouncement] = useState<string>('');
@@ -309,115 +449,6 @@ const PublicMap: React.FC = () => {
     // Extract city/municipality name from display_name (first part before comma)
     const locationName = suggestion.display_name.split(',')[0].trim();
     setSearchedLocationName(locationName);
-    // eslint-disable-next-line
-    console.log('[PublicMap] Searched location:', locationName);
-  };
-
-  // SearchController component to control map from selected location
-  const SearchController: React.FC<{ 
-    location: { lat: number; lon: number } | null;
-    bounds: L.LatLngBoundsExpression | null;
-    boundaryLevel: string | null;
-    isFollowing: boolean;
-    onStopFollowing: () => void;
-  }> = ({ location, bounds, boundaryLevel, isFollowing, onStopFollowing }) => {
-    const map = useMap();
-    const previousLocationRef = useRef<{ lat: number; lon: number } | null>(null);
-    const hasFlownRef = useRef(false);
-
-    useEffect(() => {
-      // Only fly to location if following is enabled
-      if (isFollowing && location && 
-          (!previousLocationRef.current || 
-           previousLocationRef.current.lat !== location.lat || 
-           previousLocationRef.current.lon !== location.lon ||
-           !hasFlownRef.current)) {
-        
-        // If we have boundary bounds, use fitBounds for better UX
-        if (bounds) {
-          // Adaptive padding based on boundary level
-          const paddingOptions: { [key: string]: [number, number] } = {
-            municipality: [50, 50],
-            province: [30, 30],
-            region: [20, 20],
-            default: [40, 40]
-          };
-          
-          const padding = paddingOptions[boundaryLevel as keyof typeof paddingOptions] || paddingOptions.default;
-          
-          map.fitBounds(bounds, {
-            padding,
-            animate: true,
-            duration: 1.5
-          });
-        } else {
-          // Fallback to flyTo with fixed zoom if no bounds available
-          map.flyTo([location.lat, location.lon], 15, {
-            duration: 1.5
-          });
-        }
-        
-        // Update the ref to track this location
-        previousLocationRef.current = location;
-        hasFlownRef.current = true;
-      }
-    }, [location, bounds, boundaryLevel, map, isFollowing]);
-
-    // Detect user interaction (drag, zoom) to auto-disable following
-    useEffect(() => {
-      if (!isFollowing) return;
-
-      const handleUserInteraction = () => {
-        // Only disable following if user manually moved the map
-        // (not during the initial flyTo animation)
-        if (hasFlownRef.current) {
-          onStopFollowing();
-        }
-      };
-
-      // Listen for map drag and zoom events
-      map.on('dragstart', handleUserInteraction);
-      map.on('zoomstart', handleUserInteraction);
-
-      return () => {
-        map.off('dragstart', handleUserInteraction);
-        map.off('zoomstart', handleUserInteraction);
-      };
-    }, [map, isFollowing, onStopFollowing]);
-
-    // Reset hasFlownRef when location changes
-    useEffect(() => {
-      if (location && previousLocationRef.current && 
-          (previousLocationRef.current.lat !== location.lat || 
-           previousLocationRef.current.lon !== location.lon)) {
-        hasFlownRef.current = false;
-      }
-    }, [location]);
-
-    return null;
-  };
-
-  // ZoomTracker component - tracks current zoom level for heatmap auto-disable (GV-04)
-  const ZoomTracker: React.FC<{ onZoomChange: (zoom: number) => void }> = ({ onZoomChange }) => {
-    const map = useMap();
-
-    useEffect(() => {
-      const updateZoom = () => {
-        onZoomChange(map.getZoom());
-      };
-
-      // Set initial zoom
-      updateZoom();
-
-      // Listen for zoom changes
-      map.on('zoomend', updateZoom);
-
-      return () => {
-        map.off('zoomend', updateZoom);
-      };
-    }, [map, onZoomChange]);
-
-    return null;
   };
 
   // Hazard icons and colors are now accessed from HAZARD_ICON_REGISTRY
@@ -619,6 +650,19 @@ const PublicMap: React.FC = () => {
             </div>
           </div>
         </aside>
+
+        {/* Hazard Info Panel - Slide-in details panel (GV-02) */}
+        <HazardInfoPanel
+          hazard={selectedHazard}
+          isOpen={selectedHazard !== null}
+          onClose={() => setSelectedHazard(null)}
+          onZoomTo={(lat, lon) => {
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.flyTo([lat, lon], 16, { duration: 1.5 });
+            }
+            setSelectedHazard(null);
+          }}
+        />
 
         {/* Sidebar Toggle Button */}
         <button
@@ -926,10 +970,10 @@ const PublicMap: React.FC = () => {
             </div>
           </Card>
 
-          {/* Error Alert - Enhanced Styling */}
+          {/* Error Alert - Centered Positioning */}
           {isError && (
             <div
-              className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1100] max-w-md w-full px-4"
+              className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1100] max-w-md w-full px-4"
               role="alert"
               aria-live="assertive"
             >
@@ -954,13 +998,13 @@ const PublicMap: React.FC = () => {
           {/* Loading State - Enhanced Accessibility */}
           {loading && hazards.length === 0 && (
             <div 
-              className="absolute inset-0 flex items-center justify-center bg-gray-50/90 backdrop-blur-sm z-[999]"
+              className="fixed inset-0 flex items-center justify-center bg-gray-50/90 backdrop-blur-sm z-[999]"
               role="status"
               aria-live="polite"
               aria-busy="true"
             >
               <Card className="p-6 sm:p-8 shadow-xl border border-gray-200">
-                <div className="flex flex-col items-center space-y-4">
+                <div className="flex flex-col items-center justify-center space-y-4">
                   <div 
                     className="animate-spin rounded-full h-12 w-12 sm:h-14 sm:w-14 border-4 border-gray-200 border-t-[#0a2a4d]" 
                     aria-hidden="true"
@@ -1004,6 +1048,9 @@ const PublicMap: React.FC = () => {
             
             {/* Zoom Tracker - updates current zoom for heatmap auto-disable */}
             <ZoomTracker onZoomChange={setCurrentZoom} />
+            
+            {/* Map Instance Setter - Captures Leaflet map for external component access */}
+            <MapInstanceSetter mapRef={mapInstanceRef} />
             
             {/* Heatmap Layer (GV-04) - Auto-disables at zoom > 12 */}
             <HeatmapLayer
@@ -1066,50 +1113,14 @@ const PublicMap: React.FC = () => {
                   <Marker
                     key={hazard.id}
                     position={[hazard.latitude, hazard.longitude]}
+                    icon={getHazardMarkerIcon(hazard.hazard_type, hazard.severity)}
                     // @ts-expect-error - Custom option for cluster coloring (react-leaflet-cluster extension)
                     options={{ hazardType: hazard.hazard_type }}
-                  >
-                    <Popup maxWidth={300}>
-                  <div className="p-2 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-lg capitalize">
-                        {hazard.hazard_type.replace(/_/g, ' ')}
-                      </h3>
-                      <Badge
-                        className={`${severityColors[hazard.severity] || 'bg-gray-500'} text-white`}
-                      >
-                        {hazard.severity}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <p>
-                        <strong>Location:</strong> {hazard.location_name}
-                      </p>
-                      <p>
-                        <strong>Source:</strong> {hazard.source_type.replace(/_/g, ' ')}
-                      </p>
-                      <p>
-                        <strong>Confidence:</strong> {(hazard.confidence_score * 100).toFixed(0)}%
-                      </p>
-                      <p className="text-gray-600">
-                        <strong>Detected:</strong>{' '}
-                        {new Date(hazard.created_at).toLocaleString('en-PH', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
-                      </p>
-                    </div>
-
-                    {hazard.source_content && (
-                      <p className="text-sm text-gray-700 pt-2 border-t">
-                        {hazard.source_content}
-                      </p>
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+                    eventHandlers={{
+                      click: () => setSelectedHazard(hazard),
+                    }}
+                  />
+                ))}
               </MarkerClusterGroup>
             ) : (
               // Individual markers when clustering disabled
@@ -1117,47 +1128,11 @@ const PublicMap: React.FC = () => {
                 <Marker
                   key={hazard.id}
                   position={[hazard.latitude, hazard.longitude]}
-                >
-                  <Popup maxWidth={300}>
-                    <div className="p-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-lg capitalize">
-                          {hazard.hazard_type.replace(/_/g, ' ')}
-                        </h3>
-                        <Badge
-                          className={`${severityColors[hazard.severity] || 'bg-gray-500'} text-white`}
-                        >
-                          {hazard.severity}
-                        </Badge>
-                      </div>
-
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <strong>Location:</strong> {hazard.location_name}
-                        </p>
-                        <p>
-                          <strong>Source:</strong> {hazard.source_type.replace(/_/g, ' ')}
-                        </p>
-                        <p>
-                          <strong>Confidence:</strong> {(hazard.confidence_score * 100).toFixed(0)}%
-                        </p>
-                        <p className="text-gray-600">
-                          <strong>Detected:</strong>{' '}
-                          {new Date(hazard.created_at).toLocaleString('en-PH', {
-                            dateStyle: 'medium',
-                            timeStyle: 'short',
-                          })}
-                        </p>
-                      </div>
-
-                      {hazard.source_content && (
-                        <p className="text-sm text-gray-700 pt-2 border-t">
-                          {hazard.source_content}
-                        </p>
-                      )}
-                    </div>
-                  </Popup>
-                </Marker>
+                  icon={getHazardMarkerIcon(hazard.hazard_type, hazard.severity)}
+                  eventHandlers={{
+                    click: () => setSelectedHazard(hazard),
+                  }}
+                />
               ))
             )}
           </MapContainer>
@@ -1207,6 +1182,14 @@ const PublicMap: React.FC = () => {
             >
               <AlertTriangle className="w-4 h-4" aria-hidden="true" />
               <span>Report a Hazard</span>
+              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+            </Link>
+            <Link
+              to="/track"
+              className="flex items-center gap-1.5 text-[#005a9c] hover:text-[#003d66] font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-[#005a9c] focus:ring-offset-2 rounded px-2 py-1 -mx-2 transition-colors"
+              aria-label="Track report status page"
+            >
+              <span>Track Report</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
             </Link>
           </div>
