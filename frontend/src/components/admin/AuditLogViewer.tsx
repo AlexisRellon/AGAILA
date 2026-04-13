@@ -80,8 +80,7 @@ function getActionBadgeStyle(action: string): string {
   if (lower.includes('validated') || lower.includes('approved') || lower.includes('created')) {
     return 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600';
   }
-  // Auth - failed login orange/warning, login blue, logout muted
-  if (lower === 'failed_login') return 'bg-orange-600 text-white border-orange-700 hover:bg-orange-600';
+  // Auth - login blue, logout muted
   if (lower.includes('login')) return 'bg-blue-600 text-white border-blue-700 hover:bg-blue-600';
   if (lower.includes('logout')) return 'bg-slate-500 text-white border-slate-600 hover:bg-slate-500';
   // Updates - amber
@@ -92,12 +91,6 @@ function getActionBadgeStyle(action: string): string {
   if (lower.includes('printed') || lower.includes('print')) {
     return 'bg-teal-600 text-white border-teal-700 hover:bg-teal-600';
   }
-  // RSS feed added - green (already covered by 'created' above, but explicit for clarity)
-  if (lower === 'rss_feed_added') return 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-600';
-  // RSS feed removed - red (already covered by 'deleted' above, but explicit for clarity)
-  if (lower === 'rss_feed_removed') return 'bg-red-500/90 text-white border-red-600 hover:bg-red-500';
-  // RSS feed status changed - amber
-  if (lower === 'rss_feed_status_changed') return 'bg-amber-600 text-white border-amber-700 hover:bg-amber-600';
   // RSS processing - violet
   if (lower.includes('processing') || lower.includes('started')) {
     return 'bg-violet-600 text-white border-violet-700 hover:bg-violet-600';
@@ -261,7 +254,7 @@ const AuditLogViewer: React.FC = () => {
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Timestamp', 'User Email', 'Role', 'Action', 'Description', 'Resource Type', 'Resource ID', 'Status', 'IP Address'];
+    const headers = ['Timestamp', 'User Email', 'Role', 'Action', 'Description', 'Resource Type', 'Resource ID', 'Success', 'IP Address'];
     const rows = logs.map((log: AuditLog) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
       log.user_email || 'System',
@@ -321,9 +314,8 @@ const AuditLogViewer: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All actions</SelectItem>
-                <SelectItem value="LOGIN">Login</SelectItem>
-                <SelectItem value="LOGOUT">Logout</SelectItem>
-                <SelectItem value="FAILED_LOGIN">Failed Login</SelectItem>
+                <SelectItem value="login">Login</SelectItem>
+                <SelectItem value="logout">Logout</SelectItem>
                 <SelectItem value="user_created">User Created</SelectItem>
                 <SelectItem value="role_changed">Role Changed</SelectItem>
                 <SelectItem value="user_deactivated">User Deactivated</SelectItem>
@@ -331,10 +323,9 @@ const AuditLogViewer: React.FC = () => {
                 <SelectItem value="report_validated">Report Validated</SelectItem>
                 <SelectItem value="report_rejected">Report Rejected</SelectItem>
                 <SelectItem value="report_printed">Report Printed</SelectItem>
-                <SelectItem value="rss_feed_added">RSS Feed Added</SelectItem>
-                <SelectItem value="rss_feed_removed">RSS Feed Removed</SelectItem>
-                <SelectItem value="rss_feed_status_changed">RSS Feed Status Changed</SelectItem>
+                <SelectItem value="rss_feed_created">RSS Feed Created</SelectItem>
                 <SelectItem value="rss_feed_updated">RSS Feed Updated</SelectItem>
+                <SelectItem value="rss_feed_deleted">RSS Feed Deleted</SelectItem>
                 <SelectItem value="rss_processing_started">RSS Processing Started</SelectItem>
                 <SelectItem value="rss_article_validated">RSS Article Validated</SelectItem>
                 <SelectItem value="rss_article_updated">RSS Article Updated</SelectItem>
@@ -350,7 +341,6 @@ const AuditLogViewer: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All resources</SelectItem>
-                <SelectItem value="authentication">Authentication</SelectItem>
                 <SelectItem value="user_profiles">User Profiles</SelectItem>
                 <SelectItem value="system_config">System Config</SelectItem>
                 <SelectItem value="citizen_reports">Citizen Reports</SelectItem>
