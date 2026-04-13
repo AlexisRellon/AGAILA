@@ -1,10 +1,20 @@
 {
   "version": 1,
   "skills": {
+    "redis-development": {
+      "source": "redis/agent-skills",
+      "sourceType": "github",
+      "computedHash": "993ad240385d830a9717796a4b76e835ed737bfc9d3e10a4528e00bacd58cbf8"
+    },
     "supabase-postgres-best-practices": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
       "computedHash": "e3ba3d760c5f4cc43b02a91fb8924f726c7818f95cc35d79d0a606ca622b72f5"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "257b84bf218a7d3b2cba56e929b7e933cf71cb89f2e24ab601759c599d1c23f2"
     }
   }
 }

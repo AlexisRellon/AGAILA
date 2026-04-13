@@ -72,6 +72,7 @@ export const queryKeys = {
     trends: (days: number) => ['analytics', 'trends', days] as const,
     regions: () => ['analytics', 'regions'] as const,
     distribution: () => ['analytics', 'distribution'] as const,
+    sourceBreakdown: () => ['analytics', 'source-breakdown'] as const,
     recentAlerts: (limit: number) => ['analytics', 'recent-alerts', limit] as const,
   },
   
