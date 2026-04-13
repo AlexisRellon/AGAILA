@@ -87,6 +87,13 @@ class HazardTypeDistribution(BaseModel):
     percentage: float
 
 
+class SourceBreakdown(BaseModel):
+    """Distribution of hazards by source type"""
+    source_type: str
+    count: int
+    percentage: float
+
+
 class RecentAlert(BaseModel):
     """Recent hazard alert"""
     id: str
@@ -166,7 +173,7 @@ async def get_hazard_trends(
     
     async def fetch_trends():
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        start_date = end_date - timedelta(days=days - 1)
         
         response = supabase.schema('gaia').from_('hazards') \
             .select('hazard_type,detected_at') \
@@ -361,6 +368,48 @@ async def get_hazard_distribution():
     except Exception as e:
         logger.error(f"Error fetching hazard distribution: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch hazard distribution: {str(e)}")
+
+
+@router.get("/source-breakdown", response_model=List[SourceBreakdown])
+async def get_source_breakdown():
+    """
+    Get distribution of hazards by source type (cached for 2 minutes)
+    """
+    cache_key = generate_cache_key("analytics:source-breakdown")
+
+    async def fetch_source_breakdown():
+        total_response = supabase.schema("gaia").from_('hazards').select('id', count='exact').execute()
+        total = total_response.count or 0
+
+        if total == 0:
+            return []
+
+        response = supabase.schema("gaia").from_('hazards').select('source_type').execute()
+
+        source_counts: Dict[str, int] = {}
+        for item in response.data:
+            source_type = (item.get('source_type') or 'unknown').strip().lower()
+            source_counts[source_type] = source_counts.get(source_type, 0) + 1
+
+        breakdown = []
+        for source_type, count in source_counts.items():
+            percentage = (count / total) * 100
+            breakdown.append({
+                "source_type": source_type,
+                "count": count,
+                "percentage": round(percentage, 1)
+            })
+
+        breakdown.sort(key=lambda x: x["count"], reverse=True)
+        return breakdown
+
+    try:
+        data = await get_or_set(cache_key, fetch_source_breakdown, ttl=CACHE_TTLS.get("analytics:distribution", 120))
+        return [SourceBreakdown(**item) for item in data]
+
+    except Exception as e:
+        logger.error(f"Error fetching source breakdown: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch source breakdown: {str(e)}")
 
 
 @router.get("/recent-alerts", response_model=List[RecentAlert])

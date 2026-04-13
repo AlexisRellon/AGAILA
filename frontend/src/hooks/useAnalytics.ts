@@ -23,6 +23,7 @@ import type {
   HazardTrend,
   RegionStats,
   HazardTypeDistribution,
+  SourceBreakdown,
   RecentAlert,
 } from '../lib/analyticsApi';
 
@@ -78,6 +79,16 @@ export function useHazardDistribution() {
     queryKey: queryKeys.analytics.distribution(),
     queryFn: () => analyticsApi.getDistribution(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+export function useSourceBreakdown() {
+  return useQuery<SourceBreakdown[], Error>({
+    queryKey: queryKeys.analytics.sourceBreakdown(),
+    queryFn: () => analyticsApi.getSourceBreakdown(),
+    staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: 2,
   });

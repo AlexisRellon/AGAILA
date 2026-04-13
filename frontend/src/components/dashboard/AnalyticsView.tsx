@@ -29,6 +29,7 @@ import {
   useHazardTrends,
   useRegionStats,
   useHazardDistribution,
+  useSourceBreakdown,
   useRecentAlerts,
 } from '../../hooks/useAnalytics';
 import {
@@ -81,13 +82,14 @@ export default function AnalyticsView() {
   const { data: trends, isLoading: trendsLoading, error: trendsError } = useHazardTrends(trendDays);
   const { data: regionStats, isLoading: regionsLoading, error: regionsError } = useRegionStats();
   const { data: distribution, isLoading: distLoading, error: distError } = useHazardDistribution();
+  const { data: sourceBreakdown, isLoading: sourceLoading, error: sourceError } = useSourceBreakdown();
   const { data: recentAlerts, isLoading: alertsLoading, error: alertsError } = useRecentAlerts(10);
 
   // Combined loading state
-  const loading = statsLoading || trendsLoading || regionsLoading || distLoading || alertsLoading;
+  const loading = statsLoading || trendsLoading || regionsLoading || distLoading || sourceLoading || alertsLoading;
   
   // Combined error state
-  const error = statsError || trendsError || regionsError || distError || alertsError;
+  const error = statsError || trendsError || regionsError || distError || sourceError || alertsError;
   const errorMessage = error instanceof Error ? error.message : null;
 
   // Memoize hazard legend for trends chart (prevents recalculation on every render)
@@ -108,7 +110,7 @@ export default function AnalyticsView() {
   }, [trends]);
 
   // Show full skeleton on initial load (when all data is loading)
-  if (statsLoading && trendsLoading && regionsLoading && distLoading && alertsLoading) {
+  if (statsLoading && trendsLoading && regionsLoading && distLoading && sourceLoading && alertsLoading) {
     return <AnalyticsSkeleton />;
   }
 
@@ -171,7 +173,7 @@ export default function AnalyticsView() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 !h-auto">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 !h-auto">
               <TabsTrigger value="trends" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Trends
               </TabsTrigger>
@@ -180,6 +182,9 @@ export default function AnalyticsView() {
               </TabsTrigger>
               <TabsTrigger value="regions" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Regions
+              </TabsTrigger>
+              <TabsTrigger value="sources" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                Sources
               </TabsTrigger>
               <TabsTrigger value="recent" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 Recent Alerts
@@ -226,6 +231,26 @@ export default function AnalyticsView() {
             {/* Regions Tab */}
             <TabsContent value="regions">
               <OptimizedRegionChart data={regionStats || []} />
+            </TabsContent>
+
+            {/* Source Breakdown Tab */}
+            <TabsContent value="sources" className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <OptimizedPieChart
+                  data={(sourceBreakdown || []).map((item) => ({
+                    hazard_type: item.source_type,
+                    count: item.count,
+                    percentage: item.percentage,
+                  }))}
+                />
+                <OptimizedDistributionBarChart
+                  data={(sourceBreakdown || []).map((item) => ({
+                    hazard_type: item.source_type,
+                    count: item.count,
+                    percentage: item.percentage,
+                  }))}
+                />
+              </div>
             </TabsContent>
 
             {/* Recent Alerts Tab */}
