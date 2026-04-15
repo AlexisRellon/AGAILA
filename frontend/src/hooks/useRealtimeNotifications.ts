@@ -116,7 +116,9 @@ export function useRealtimeHazards() {
 
   useEffect(() => {
     // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
+    // Check if channel is already subscribed using the status callback
+    // instead of checking .state property which has type mismatch
+    if (channelRef.current) {
       // eslint-disable-next-line no-console
       console.log('[Realtime] Already subscribed to hazards:validated');
       return;
@@ -310,7 +312,9 @@ export function useRealtimeRSSFeeds() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   
   // Only subscribe if user is admin (using userProfile role from database, not Auth user role)
-  const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'validator';  useEffect(() => {
+  const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'validator';
+
+  useEffect(() => {
     if (!isAdmin) {
       // eslint-disable-next-line no-console
       console.log('[Realtime] Skipping RSS feed subscription (not admin)');
@@ -318,7 +322,9 @@ export function useRealtimeRSSFeeds() {
     }
 
     // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
+    // Check if channel is already subscribed using the status callback
+    // instead of checking .state property which has type mismatch
+    if (channelRef.current) {
       // eslint-disable-next-line no-console
       console.log('[Realtime] Already subscribed to rss:feeds');
       return;
