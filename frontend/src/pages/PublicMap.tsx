@@ -18,6 +18,11 @@ import { FilterPanel } from '../components/filters/FilterPanel';
 import { BoundaryLayer } from '../components/map/BoundaryLayer';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
 import { useHazardFilters } from '../hooks/useHazardFilters';
+import { 
+  SidebarSkeleton, 
+  FloatingControlsSkeleton,
+  HazardCountSkeleton,
+} from '../components/skeletons/MapSkeleton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faBars, 
@@ -544,128 +549,139 @@ const PublicMap: React.FC = () => {
 
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto overscroll-contain">
-            {/* Search Location */}
-            <div className="p-4 border-b border-gray-200">
-              <label htmlFor="location-search" className="sr-only">Search for a location in the Philippines</label>
-              <div className="relative" role="search">
-                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                  <FontAwesomeIcon icon={faSearch} className="text-base text-gray-400" aria-hidden="true" />
-                </div>
-                <input
-                  id="location-search"
-                  type="search"
-                  placeholder="Search Location (Philippines)"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  onFocus={() => searchQuery && setShowSuggestions(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setShowSuggestions(false);
-                    }
-                  }}
-                  className="w-full pl-10 pr-12 py-2.5 sm:py-3 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#0a2a4d] focus:border-transparent transition-shadow"
-                  aria-describedby="search-hint"
-                  aria-autocomplete="list"
-                  aria-controls="search-suggestions"
-                  aria-expanded={showSuggestions && searchSuggestions.length > 0}
-                  autoComplete="off"
-                />
-                <span id="search-hint" className="sr-only">
-                  Type at least 3 characters to search. Use arrow keys to navigate suggestions.
-                </span>
-                <button 
-                  type="button"
-                  aria-label={isSearching ? 'Searching...' : 'Search location'}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-[#0a2a4d] hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-[#0a2a4d]"
-                  onClick={() => searchQuery && searchLocation(searchQuery)}
-                  disabled={isSearching}
-                >
-                  {isSearching ? (
-                    <FontAwesomeIcon icon={faRotateRight} className="text-base animate-spin" aria-hidden="true" />
-                  ) : (
-                    <FontAwesomeIcon icon={faSearch} className="text-base" aria-hidden="true" />
+            {/* Show skeleton during loading, actual content when loaded */}
+            {loading ? (
+              <SidebarSkeleton />
+            ) : (
+              <>
+                {/* Search Location */}
+                <div className="p-4 border-b border-gray-200">
+                  <label htmlFor="location-search" className="sr-only">Search for a location in the Philippines</label>
+                  <div className="relative" role="search">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <FontAwesomeIcon icon={faSearch} className="text-base text-gray-400" aria-hidden="true" />
+                    </div>
+                    <input
+                      id="location-search"
+                      type="search"
+                      placeholder="Search Location (Philippines)"
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      onFocus={() => searchQuery && setShowSuggestions(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setShowSuggestions(false);
+                        }
+                      }}
+                      className="w-full pl-10 pr-12 py-2.5 sm:py-3 border border-gray-300 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#0a2a4d] focus:border-transparent transition-shadow"
+                      aria-describedby="search-hint"
+                      aria-autocomplete="list"
+                      aria-controls="search-suggestions"
+                      aria-expanded={showSuggestions && searchSuggestions.length > 0}
+                      autoComplete="off"
+                    />
+                    <span id="search-hint" className="sr-only">
+                      Type at least 3 characters to search. Use arrow keys to navigate suggestions.
+                    </span>
+                    <button 
+                      type="button"
+                      aria-label={isSearching ? 'Searching...' : 'Search location'}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-[#0a2a4d] hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-[#0a2a4d]"
+                      onClick={() => searchQuery && searchLocation(searchQuery)}
+                      disabled={isSearching}
+                    >
+                      {isSearching ? (
+                        <FontAwesomeIcon icon={faRotateRight} className="text-base animate-spin" aria-hidden="true" />
+                      ) : (
+                        <FontAwesomeIcon icon={faSearch} className="text-base" aria-hidden="true" />
+                      )}
+                    </button>
+                    
+                    {/* Search Suggestions Dropdown */}
+                    {showSuggestions && searchSuggestions.length > 0 && (
+                      <ul
+                        id="search-suggestions"
+                        role="listbox"
+                        aria-label="Location suggestions"
+                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto"
+                      >
+                        {searchSuggestions.map((suggestion) => (
+                          <li key={suggestion.place_id} role="option" aria-selected={false}>
+                            <button
+                              onClick={() => handleSelectSuggestion(suggestion)}
+                              className="w-full text-left px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
+                            >
+                              <div className="flex items-start gap-3">
+                                <FontAwesomeIcon icon={faMapPin} className="text-sm text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {suggestion.display_name.split(',')[0]}
+                                  </p>
+                                  <p className="text-xs text-gray-500 truncate">
+                                    {suggestion.display_name}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  
+                  {/* Stop Following Button - shown when following active */}
+                  {isFollowingSearch && selectedLocation && (
+                    <button
+                      type="button"
+                      onClick={() => setIsFollowingSearch(false)}
+                      className="mt-3 w-full px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1"
+                      aria-live="polite"
+                    >
+                      <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
+                      Stop Following Location
+                    </button>
                   )}
-                </button>
-                
-                {/* Search Suggestions Dropdown */}
-                {showSuggestions && searchSuggestions.length > 0 && (
-                  <ul
-                    id="search-suggestions"
-                    role="listbox"
-                    aria-label="Location suggestions"
-                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto"
-                  >
-                    {searchSuggestions.map((suggestion) => (
-                      <li key={suggestion.place_id} role="option" aria-selected={false}>
-                        <button
-                          onClick={() => handleSelectSuggestion(suggestion)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
-                        >
-                          <div className="flex items-start gap-3">
-                            <FontAwesomeIcon icon={faMapPin} className="text-sm text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {suggestion.display_name.split(',')[0]}
-                              </p>
-                              <p className="text-xs text-gray-500 truncate">
-                                {suggestion.display_name}
-                              </p>
-                            </div>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              
-              {/* Stop Following Button - shown when following active */}
-              {isFollowingSearch && selectedLocation && (
-                <button
-                  type="button"
-                  onClick={() => setIsFollowingSearch(false)}
-                  className="mt-3 w-full px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1"
-                  aria-live="polite"
-                >
-                  <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
-                  Stop Following Location
-                </button>
-              )}
-            </div>
+                </div>
 
-            {/* FilterPanel Component (FP-01, FP-02, FP-03, FP-04) */}
-            <div className="p-4">
-              <FilterPanel 
-                hazards={hazards}
-                className="h-full"
-                onExpandChange={setIsSidebarExpanded}
-              />
-            </div>
+                {/* FilterPanel Component (FP-01, FP-02, FP-03, FP-04) */}
+                <div className="p-4">
+                  <FilterPanel 
+                    hazards={hazards}
+                    className="h-full"
+                    onExpandChange={setIsSidebarExpanded}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Active Hazards Count - Fixed at bottom */}
           <div className="p-4 border-t border-gray-200 bg-white shrink-0">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 border border-blue-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm sm:text-base text-gray-700">
-                    <strong className="text-[#0a2a4d] text-lg sm:text-xl">{filteredHazards.length}</strong>
-                    <span className="ml-1">hazard{filteredHazards.length !== 1 ? 's' : ''} visible</span>
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    {hazards.length - filteredHazards.length > 0 && (
-                      <span className="text-amber-600 font-medium">
-                        {hazards.length - filteredHazards.length} hidden by filters
-                      </span>
-                    )}
-                    {hazards.length - filteredHazards.length === 0 && 'All hazards shown'}
-                  </p>
+            {loading ? (
+              <HazardCountSkeleton />
+            ) : (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 border border-blue-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm sm:text-base text-gray-700">
+                      <strong className="text-[#0a2a4d] text-lg sm:text-xl">{filteredHazards.length}</strong>
+                      <span className="ml-1">hazard{filteredHazards.length !== 1 ? 's' : ''} visible</span>
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                      {hazards.length - filteredHazards.length > 0 && (
+                        <span className="text-amber-600 font-medium">
+                          {hazards.length - filteredHazards.length} hidden by filters
+                        </span>
+                      )}
+                      {hazards.length - filteredHazards.length === 0 && 'All hazards shown'}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="hidden sm:flex bg-white text-[#0a2a4d] border-[#0a2a4d]">
+                    Live
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="hidden sm:flex bg-white text-[#0a2a4d] border-[#0a2a4d]">
-                  Live
-                </Badge>
               </div>
-            </div>
+            )}
           </div>
         </aside>
 
@@ -753,104 +769,110 @@ const PublicMap: React.FC = () => {
             role="region"
             aria-label="Map controls and legend"
           >
-            {/* Report Generator Button (RG-02) - Only for authenticated users */}
-            {user && (
-              <div className="p-3 border-b border-gray-100">
-                <ReportGenerator 
-                  hazards={filteredHazards}
-                  mapContainerRef={mapContainerRef}
-                  onReportGenerated={() => {
-                    setAnnouncement('Report generated successfully.');
-                  }}
-                  triggerButton={
-                    <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
-                      <FontAwesomeIcon icon={faFile} className="text-xs" />
-                      Generate Report
-                    </button>
-                  }
-                />
+            {loading ? (
+              <div className="p-3 sm:p-4">
+                <FloatingControlsSkeleton />
               </div>
-            )}
+            ) : (
+              <>
+                {/* Report Generator Button (RG-02) - Only for authenticated users */}
+                {user && (
+                  <div className="p-3 border-b border-gray-100">
+                    <ReportGenerator 
+                      hazards={filteredHazards}
+                      mapContainerRef={mapContainerRef}
+                      onReportGenerated={() => {
+                        setAnnouncement('Report generated successfully.');
+                      }}
+                      triggerButton={
+                        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
+                          <FontAwesomeIcon icon={faFile} className="text-xs" />
+                          Generate Report
+                        </button>
+                      }
+                    />
+                  </div>
+                )}
 
-            {/* Legend Section */}
-            <div className="p-3 sm:p-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <h2 id="legend-heading" className="text-sm sm:text-base font-semibold text-gray-800">
-                  Legend
-                </h2>
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant="outline" 
-                    className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-                    aria-label={`${filteredHazards.length} active hazards`}
-                  >
-                    {filteredHazards.length} active
-                  </Badge>
-                  <button
-                    onClick={() => setIsLegendVisible(!isLegendVisible)}
-                    className="p-1.5 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-[#0a2a4d]"
-                    aria-expanded={isLegendVisible}
-                    aria-controls="legend-content"
-                    aria-label={isLegendVisible ? 'Collapse legend' : 'Expand legend'}
-                  >
-                    {isLegendVisible ? (
-                      <FontAwesomeIcon icon={faChevronUp} className="text-xs text-gray-500" aria-hidden="true" />
-                    ) : (
-                      <FontAwesomeIcon icon={faChevronDown} className="text-xs text-gray-500" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              {isLegendVisible && (
-                <ul 
-                  id="legend-content"
-                  className="space-y-1 max-h-[200px] overflow-y-auto mt-3 -mx-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-                  aria-label="Hazard types and counts"
-                >
-                  {Object.entries(HAZARD_ICON_REGISTRY).map(([key, config]) => {
-                    const count = filteredHazards.filter(h => h.hazard_type === key).length;
-                    const hasCount = count > 0;
-                    return (
-                      <li
-                        key={key}
-                        className={`flex items-center justify-between p-1.5 rounded-lg transition-colors ${
-                          hasCount ? 'hover:bg-gray-50 cursor-default' : 'opacity-40'
-                        }`}
-                        aria-label={`${config.label}: ${count} ${count === 1 ? 'hazard' : 'hazards'}`}
+                {/* Legend Section */}
+                <div className="p-3 sm:p-4 border-b border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <h2 id="legend-heading" className="text-sm sm:text-base font-semibold text-gray-800">
+                      Legend
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="outline" 
+                        className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                        aria-label={`${filteredHazards.length} active hazards`}
                       >
-                        <div className="flex items-center space-x-2">
-                          <div 
-                            className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0"
-                            style={{ 
-                              backgroundColor: hasCount ? config.bgColor : '#f3f4f6', 
-                              color: hasCount ? config.color : '#9ca3af' 
-                            }}
-                            aria-hidden="true"
+                        {filteredHazards.length} active
+                      </Badge>
+                      <button
+                        onClick={() => setIsLegendVisible(!isLegendVisible)}
+                        className="p-1.5 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-[#0a2a4d]"
+                        aria-expanded={isLegendVisible}
+                        aria-controls="legend-content"
+                        aria-label={isLegendVisible ? 'Collapse legend' : 'Expand legend'}
+                      >
+                        {isLegendVisible ? (
+                          <FontAwesomeIcon icon={faChevronUp} className="text-xs text-gray-500" aria-hidden="true" />
+                        ) : (
+                          <FontAwesomeIcon icon={faChevronDown} className="text-xs text-gray-500" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  {isLegendVisible && (
+                    <ul 
+                      id="legend-content"
+                      className="space-y-1 max-h-[200px] overflow-y-auto mt-3 -mx-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+                      aria-label="Hazard types and counts"
+                    >
+                      {Object.entries(HAZARD_ICON_REGISTRY).map(([key, config]) => {
+                        const count = filteredHazards.filter(h => h.hazard_type === key).length;
+                        const hasCount = count > 0;
+                        return (
+                          <li
+                            key={key}
+                            className={`flex items-center justify-between p-1.5 rounded-lg transition-colors ${
+                              hasCount ? 'hover:bg-gray-50 cursor-default' : 'opacity-40'
+                            }`}
+                            aria-label={`${config.label}: ${count} ${count === 1 ? 'hazard' : 'hazards'}`}
                           >
-                            <HazardIcon hazardType={key} size={16} />
-                          </div>
-                          <span className={`text-xs font-medium ${hasCount ? 'text-gray-700' : 'text-gray-400'}`}>
-                            {config.label}
-                          </span>
-                        </div>
-                        <Badge 
-                          variant={hasCount ? "secondary" : "outline"} 
-                          className={`text-xs h-5 min-w-[1.75rem] justify-center ${
-                            hasCount 
-                              ? 'bg-gray-100 text-gray-700' 
-                              : 'bg-transparent text-gray-400 border-gray-200'
-                          }`}
-                        >
-                          {count}
-                        </Badge>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                            <div className="flex items-center space-x-2">
+                              <div 
+                                className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0"
+                                style={{ 
+                                  backgroundColor: hasCount ? config.bgColor : '#f3f4f6', 
+                                  color: hasCount ? config.color : '#9ca3af' 
+                                }}
+                                aria-hidden="true"
+                              >
+                                <HazardIcon hazardType={key} size={16} />
+                              </div>
+                              <span className={`text-xs font-medium ${hasCount ? 'text-gray-700' : 'text-gray-400'}`}>
+                                {config.label}
+                              </span>
+                            </div>
+                            <Badge 
+                              variant={hasCount ? "secondary" : "outline"} 
+                              className={`text-xs h-5 min-w-[1.75rem] justify-center ${
+                                hasCount 
+                                  ? 'bg-gray-100 text-gray-700' 
+                                  : 'bg-transparent text-gray-400 border-gray-200'
+                              }`}
+                            >
+                              {count}
+                            </Badge>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
 
-            {/* Map Controls Section - Clustering & Heatmap */}
+                {/* Map Controls Section - Clustering & Heatmap */}
             <div className="p-3 sm:p-4 space-y-3">
               {/* Clustering Toggle */}
               <div className="flex items-center justify-between" data-tour="cluster-section">
@@ -987,6 +1009,8 @@ const PublicMap: React.FC = () => {
                 </div>
               )}
             </div>
+            </>
+          )}
           </Card>
 
           {/* Error Alert - Centered Positioning */}
