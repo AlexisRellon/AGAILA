@@ -1,535 +1,111 @@
 /**
- * Realtime Notifications Hook
+ * Analytics API Client
  * 
- * Manages Supabase Realtime subscriptions using POSTGRES_CHANGES pattern
+ * Provides methods to fetch analytics and statistics from the backend
+ * All methods return cached data via React Query hooks in useAnalytics.ts
  * 
- * Modules: RSS-09, GV-02, FP-04
- * Pattern: Uses postgres_changes for database table subscriptions
- * Reference: Supabase Realtime Postgres Changes (https://supabase.com/docs/guides/realtime/postgres-changes)
- * 
- * IMPORTANT: postgres_changes does NOT use broadcast config or private channels.
- * For broadcast pattern, see Supabase Realtime Broadcast documentation.
+ * Module: AAM-01 (Advanced Analytics Module)
  */
 
-/* eslint-disable no-console */
-import { useEffect, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import { fetchValidatedHazards } from '../services/hazardsApi';
-import { toast } from 'sonner';
-import { useAuth } from '../contexts/AuthContext';
-import { useNotificationStore } from '../stores/notificationStore';
+import { apiRequest } from './api';
 
-interface HazardRecord {
+export interface HazardStats {
+  total_hazards: number;
+  active_hazards: number;
+  resolved_hazards: number;
+  unverified_reports: number;
+  avg_confidence: number;
+  avg_time_to_action?: number;
+}
+
+export interface HazardTrend {
+  date: string;
+  volcanic_eruption: number;
+  earthquake: number;
+  flood: number;
+  landslide: number;
+  fire: number;
+  storm_surge: number;
+  total: number;
+}
+
+export interface RegionStats {
+  region: string;
+  total_count: number;
+  active_count: number;
+  resolved_count: number;
+}
+
+export interface HazardTypeDistribution {
+  hazard_type: string;
+  count: number;
+  percentage: number;
+}
+
+export interface SourceBreakdown {
+  source_type: 'rss' | 'citizen_report';
+  count: number;
+  percentage: number;
+  avg_confidence: number;
+}
+
+export interface RecentAlert {
   id: string;
   hazard_type: string;
   location_name: string;
+  admin_division?: string;
   severity: 'low' | 'moderate' | 'high' | 'critical';
   source_type: 'rss' | 'citizen_report';
-  validated: boolean;
-  latitude: number;
-  longitude: number;
-  created_at: string;
-}
-
-interface RSSFeedBroadcast {
-  id: string;
-  name: string;
-  url: string;
-  category: string;
-  active: boolean;
-  created_at: string;
+  status: 'active' | 'resolved' | 'archived';
+  confidence_score: number;
+  detected_at: string;
 }
 
 /**
- * Subscribe to real-time hazard notifications
- * Uses postgres_changes pattern to listen to database table changes
- * 
- * Channel: 'hazards:validated'
- * Events: INSERT (new hazard), UPDATE (hazard validated)
- * Authorization: RLS policies on gaia.hazards table control access
+ * Analytics API client - provides methods to fetch various analytics data
  */
-export function useRealtimeHazards() {
-  const queryClient = useQueryClient();
-  const { addNotification } = useNotificationStore();
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const pollIntervalRef = useRef<number | null>(null);
-  const lastSeenRef = useRef<string | null>(null);
-  
-  // LRU cache for seen alerts with TTL (max 1000 entries, 30 min expiry)
-  const seenAlertsRef = useRef<Map<string, number>>(new Map());
+export const analyticsApi = {
+  /**
+   * Get overall hazard statistics
+   */
+  async getStats(): Promise<HazardStats> {
+    return apiRequest<HazardStats>('/api/analytics/stats');
+  },
 
-  const notifyBrowser = useCallback((hazard: { id: string; hazard_type: string; location_name: string; severity?: string }) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
+  /**
+   * Get hazard trends over time
+   * @param days Number of days to retrieve (7-90)
+   */
+  async getTrends(days: number = 30): Promise<HazardTrend[]> {
+    return apiRequest<HazardTrend[]>(`/api/analytics/trends?days=${days}`);
+  },
 
-    const notification = new Notification(`High severity ${hazard.hazard_type} detected`, {
-      body: `${hazard.location_name} (${(hazard.severity || 'unknown').toUpperCase()})`,
-      tag: `hazard-${hazard.id}`,
-    });
+  /**
+   * Get statistics by administrative region
+   */
+  async getRegionStats(): Promise<RegionStats[]> {
+    return apiRequest<RegionStats[]>('/api/analytics/regions');
+  },
 
-    notification.onclick = () => {
-      window.location.href = `/map?hazard=${hazard.id}`;
-    };
-  }, []);
+  /**
+   * Get hazard type distribution (count and percentage)
+   */
+  async getDistribution(): Promise<HazardTypeDistribution[]> {
+    return apiRequest<HazardTypeDistribution[]>('/api/analytics/distribution');
+  },
 
-  const emitHazardAlert = useCallback((hazard: {
-    id: string;
-    hazard_type: string;
-    location_name: string;
-    severity?: string;
-    source_type?: string;
-    created_at?: string;
-  }) => {
-    const isHighSeverity = (severity?: string) =>
-      severity?.toLowerCase() === 'high' || severity?.toLowerCase() === 'critical';
+  /**
+   * Get breakdown by source type (RSS vs citizen reports)
+   */
+  async getSourceBreakdown(): Promise<SourceBreakdown[]> {
+    return apiRequest<SourceBreakdown[]>('/api/analytics/sources');
+  },
 
-    // Bounded LRU cache: maintain max 1000 entries, prune entries older than 30 min
-    const alertKey = `${hazard.id}:${hazard.created_at || ''}`;
-    const now = Date.now();
-    const TTL_MS = 30 * 60 * 1000; // 30 minutes
-    const MAX_ENTRIES = 1000;
-
-    // Check if already seen and not expired
-    if (seenAlertsRef.current.has(alertKey)) {
-      const timestamp = seenAlertsRef.current.get(alertKey) || 0;
-      if (now - timestamp < TTL_MS) {
-        return; // Duplicate within TTL window
-      }
-      seenAlertsRef.current.delete(alertKey); // Remove expired entry
-    }
-
-    // Prune old entries when approaching capacity
-    if (seenAlertsRef.current.size >= MAX_ENTRIES) {
-      const entriesToDelete: string[] = [];
-      seenAlertsRef.current.forEach((timestamp, key) => {
-        if (now - timestamp >= TTL_MS) {
-          entriesToDelete.push(key);
-        }
-      });
-      entriesToDelete.forEach(key => seenAlertsRef.current.delete(key));
-
-      // If still at capacity, evict oldest entries (basic LRU)
-      if (seenAlertsRef.current.size >= MAX_ENTRIES) {
-        const toEvict = Math.ceil(MAX_ENTRIES * 0.1); // Remove 10%
-        let evicted = 0;
-        for (const [key] of seenAlertsRef.current) {
-          if (evicted >= toEvict) break;
-          seenAlertsRef.current.delete(key);
-          evicted++;
-        }
-      }
-    }
-
-    seenAlertsRef.current.set(alertKey, now);
-
-    const normalizedSeverity = (hazard.severity || 'unknown').toLowerCase();
-    const shouldEscalate = isHighSeverity(normalizedSeverity);
-
-    addNotification({
-      type: 'hazard',
-      severity: shouldEscalate ? 'error' : 'warning',
-      title: `New ${hazard.hazard_type} detected`,
-      message: `${hazard.location_name} - Severity: ${normalizedSeverity.toUpperCase()}`,
-      link: `/map?hazard=${hazard.id}`,
-      metadata: { hazardId: hazard.id, hazardType: hazard.hazard_type }
-    });
-
-    if (!shouldEscalate) return;
-
-    toast.warning(`New ${hazard.hazard_type} detected in ${hazard.location_name}`, {
-      description: `Severity: ${normalizedSeverity.toUpperCase()} | Source: ${hazard.source_type === 'rss' ? 'News Feed' : 'Citizen Report'}`,
-      duration: 8000,
-      action: {
-        label: 'View on Map',
-        onClick: () => {
-          window.location.href = `/map?hazard=${hazard.id}`;
-        }
-      }
-    });
-    notifyBrowser(hazard);
-  }, [addNotification, notifyBrowser]);
-
-  useEffect(() => {
-    // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
-      // eslint-disable-next-line no-console
-      console.log('[Realtime] Already subscribed to hazards:validated');
-      return () => {
-        // No-op cleanup for early return
-      };
-    }
-
-    const startPollingFallback = () => {
-      // Avoid duplicate pollers
-      if (pollIntervalRef.current) return;
-
-      console.warn('[Realtime] Starting poll fallback for hazards (every 30s)');
-
-      // Initialize lastSeenRef to current time to avoid spamming on start
-      lastSeenRef.current = new Date().toISOString();
-
-      pollIntervalRef.current = window.setInterval(async () => {
-        try {
-          // PATCH-1.4: Use backend API instead of direct Supabase access
-          const data = await fetchValidatedHazards({ limit: 10 });
-
-          if (!data || data.length === 0) return;
-
-          const newest = data[0];
-          if (!newest || !newest.created_at) return;
-
-          if (!lastSeenRef.current || newest.created_at > lastSeenRef.current) {
-            for (let i = data.length - 1; i >= 0; i--) {
-              const h = data[i];
-              if (!h.created_at) continue;
-              if (h.created_at > (lastSeenRef.current || '')) {
-                emitHazardAlert({
-                  id: h.id,
-                  hazard_type: h.hazard_type,
-                  location_name: h.location_name,
-                  severity: h.severity ?? undefined,
-                  source_type: h.source_type,
-                  created_at: h.created_at,
-                });
-              }
-            }
-
-            lastSeenRef.current = newest.created_at;
-            queryClient.invalidateQueries({ queryKey: ['hazards'] });
-          }
-        } catch (err) {
-          console.error('[Realtime Poll] Error while polling hazards:', err);
-        }
-      }, 30000);
-    };
-
-    const setupChannel = async () => {
-      try {
-        // Set auth token for private channel (required for RLS)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          await supabase.realtime.setAuth(session.access_token);
-        } else {
-          // No active session — unauthenticated users cannot subscribe to
-          // postgres_changes. Fall back to polling silently instead of showing
-          // a confusing "Real-time notifications unavailable" error toast.
-          startPollingFallback();
-          return;
-        }
-
-        const channel = supabase
-          .channel('hazards:validated')
-          .on<HazardRecord>(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'gaia', table: 'hazards' },
-            (payload) => {
-              const hazard = payload.new;
-
-              if (!hazard) {
-                console.warn('[Realtime] Received INSERT with no record data');
-                return;
-              }
-
-              // Filter for validated hazards on client side
-              if (!hazard.validated) {
-                return;
-              }
-
-              console.log('[Realtime] New hazard:', hazard);
-
-            emitHazardAlert(hazard);
-
-            // Invalidate queries to refresh UI
-            queryClient.invalidateQueries({ queryKey: ['hazards'] });
-            queryClient.invalidateQueries({ queryKey: ['rss', 'statistics'] });
-            queryClient.invalidateQueries({ queryKey: ['map', 'markers'] });
-          })
-          .on<HazardRecord>(
-            'postgres_changes',
-            { event: 'UPDATE', schema: 'gaia', table: 'hazards' },
-            (payload) => {
-              // Custom event for when a hazard becomes validated
-              const hazard = payload.new;
-              const oldHazard = payload.old;
-            
-            if (!hazard) return;
-
-            // eslint-disable-next-line no-console
-            console.log('[Realtime] Hazard updated:', hazard);
-
-            // Only notify if it actually became validated
-            if (oldHazard && !oldHazard.validated && hazard.validated) {
-              toast.info(
-                `Hazard report validated: ${hazard.hazard_type} in ${hazard.location_name}`,
-                {
-                  description: 'A citizen report has been verified by validators',
-                  duration: 6000,
-                  action: {
-                    label: 'View Details',
-                    onClick: () => {
-                      window.location.href = `/map?hazard=${hazard.id}`;
-                    }
-                  }
-                }
-              );
-
-              // Refresh UI
-              queryClient.invalidateQueries({ queryKey: ['hazards'] });
-              queryClient.invalidateQueries({ queryKey: ['reports'] });
-            }
-          })
-          .subscribe((status, err) => {
-            switch (status) {
-              case 'SUBSCRIBED':
-                // eslint-disable-next-line no-console
-                console.log('[Realtime] ✅ Connected to hazards:validated channel');
-                // Stop any polling fallback when channel is connected
-                if (pollIntervalRef.current) {
-                  clearInterval(pollIntervalRef.current as unknown as number);
-                  pollIntervalRef.current = null;
-                }
-                break;
-              case 'CHANNEL_ERROR':
-                // eslint-disable-next-line no-console
-                console.warn('[Realtime] ⚠️ Channel error (falling back to polling):', err);
-                toast.warning('Real-time notifications unavailable', {
-                  description: 'Hazard updates will refresh every 30 seconds'
-                });
-                // Start polling fallback when channel has errors
-                startPollingFallback();
-                break;
-              case 'TIMED_OUT':
-                // eslint-disable-next-line no-console
-                console.warn('[Realtime] ⏱️ Connection timed out, auto-retrying...');
-                break;
-              case 'CLOSED':
-                // eslint-disable-next-line no-console
-                console.log('[Realtime] 🔌 Channel closed');
-                // Start polling fallback when closed
-                startPollingFallback();
-                break;
-            }
-          });
-
-        channelRef.current = channel;
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('[Realtime] Failed to setup hazard channel:', error);
-        toast.error('Failed to connect to real-time notifications');
-      }
-    };
-
-    setupChannel();
-
-    // Cleanup on unmount
-    return () => {
-      if (channelRef.current) {
-        // eslint-disable-next-line no-console
-        console.log('[Realtime] Unsubscribing from hazards:validated');
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, [queryClient, addNotification, emitHazardAlert]);
-}
-
-/**
- * Subscribe to real-time RSS feed change notifications (Admin only)
- * Uses postgres_changes pattern to listen to database table changes
- * 
- * Channel: 'rss:feeds'
- * Events: INSERT, UPDATE, DELETE
- * Authorization: RLS policies on gaia.rss_feeds table control access
- */
-export function useRealtimeRSSFeeds() {
-  const queryClient = useQueryClient();
-  const { userProfile } = useAuth();
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  
-  // Only subscribe if user is admin (using userProfile role from database, not Auth user role)
-  const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'validator';
-
-  useEffect(() => {
-    if (!isAdmin) {
-      // eslint-disable-next-line no-console
-      console.log('[Realtime] Skipping RSS feed subscription (not admin)');
-      return;
-    }
-
-    // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
-      // eslint-disable-next-line no-console
-      console.log('[Realtime] Already subscribed to rss:feeds');
-      return;
-    }
-
-    const setupChannel = async () => {
-      try {
-        // Set auth token for private channel
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          await supabase.realtime.setAuth(session.access_token);
-        }
-
-        const channel = supabase
-          .channel('rss:feeds')
-          .on<RSSFeedBroadcast>(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'gaia', table: 'rss_feeds' },
-            (payload) => {
-              const feed = payload.new;
-
-              if (!feed) return;
-
-              console.log('[Realtime] RSS feed added:', feed);
-
-            toast.success(`New RSS feed added: ${feed.name}`, {
-              description: `Category: ${feed.category}`,
-              duration: 5000
-            });
-
-            queryClient.invalidateQueries({ queryKey: ['rss', 'feeds'] });
-            queryClient.invalidateQueries({ queryKey: ['rss', 'statistics'] });
-          })
-          .on<RSSFeedBroadcast>(
-            'postgres_changes',
-            { event: 'UPDATE', schema: 'gaia', table: 'rss_feeds' },
-            (payload) => {
-              const feed = payload.new;
-
-              if (!feed) return;
-
-              console.log('[Realtime] RSS feed updated:', feed);
-
-            toast.info(`RSS feed updated: ${feed.name}`, {
-              duration: 4000
-            });
-
-            queryClient.invalidateQueries({ queryKey: ['rss', 'feeds'] });
-          })
-          .on<RSSFeedBroadcast>(
-            'postgres_changes',
-            { event: 'DELETE', schema: 'gaia', table: 'rss_feeds' },
-            (payload) => {
-              const feed = payload.old;
-
-              if (!feed) return;
-
-              console.log('[Realtime] RSS feed deleted:', feed);
-
-            toast.warning(`RSS feed removed: ${feed.name}`, {
-              duration: 4000
-            });
-
-            queryClient.invalidateQueries({ queryKey: ['rss', 'feeds'] });
-            queryClient.invalidateQueries({ queryKey: ['rss', 'statistics'] });
-          })
-          .subscribe((status, err) => {
-            switch (status) {
-              case 'SUBSCRIBED':
-                // eslint-disable-next-line no-console
-                console.log('[Realtime] ✅ Connected to rss:feeds channel (admin)');
-                break;
-              case 'CHANNEL_ERROR':
-                // eslint-disable-next-line no-console
-                console.error('[Realtime] ❌ RSS channel error:', err);
-                toast.error('RSS feed notifications unavailable');
-                break;
-              case 'TIMED_OUT':
-                // eslint-disable-next-line no-console
-                console.warn('[Realtime] ⏱️ RSS connection timed out, retrying...');
-                break;
-              case 'CLOSED':
-                // eslint-disable-next-line no-console
-                console.log('[Realtime] 🔌 RSS channel closed');
-                break;
-            }
-          });
-
-        channelRef.current = channel;
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('[Realtime] Failed to setup RSS channel:', error);
-      }
-    };
-
-    setupChannel();
-
-    return () => {
-      if (channelRef.current) {
-        // eslint-disable-next-line no-console
-        console.log('[Realtime] Unsubscribing from rss:feeds');
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    };
-  }, [isAdmin, queryClient, userProfile?.role]);
-}
-
-/**
- * Combined hook to manage all realtime subscriptions
- * 
- * Use this hook in the main App component to enable all realtime features.
- * Automatically subscribes to appropriate channels based on user role.
- * 
- * @example
- * ```tsx
- * function App() {
- *   useRealtimeNotifications();
- *   return <RouterProvider router={router} />;
- * }
- * ```
- */
-export function useRealtimeNotifications() {
-  useRealtimeHazards();
-  useRealtimeRSSFeeds();
-}
-
-/**
- * Manual trigger for testing realtime notifications (dev only)
- */
-export function useTestRealtimeNotification() {
-  const queryClient = useQueryClient();
-
-  const triggerTestNotification = useCallback(() => {
-    toast.info('Test: New hazard detected in Metro Manila', {
-      description: 'Severity: HIGH | Source: News Feed',
-      duration: 5000,
-      action: {
-        label: 'View on Map',
-        onClick: () => {
-          // eslint-disable-next-line no-console
-          console.log('Navigate to map');
-        }
-      }
-    });
-
-    queryClient.invalidateQueries({ queryKey: ['hazards'] });
-  }, [queryClient]);
-
-  return { triggerTestNotification };
-}
-
-/**
- * Request browser notification permission
- * Should be called from an explicit user gesture (e.g., button click)
- */
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    return 'denied';
-  }
-  
-  try {
-    return await Notification.requestPermission();
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to request notification permission:', error);
-    return 'denied';
-  }
-}
+  /**
+   * Get recent hazard alerts
+   * @param limit Number of alerts to retrieve
+   */
+  async getRecentAlerts(limit: number = 10): Promise<RecentAlert[]> {
+    return apiRequest<RecentAlert[]>(`/api/analytics/recent?limit=${limit}`);
+  },
+};
