@@ -444,7 +444,7 @@ async def submit_citizen_report(
         try:
             result = supabase.schema("gaia").from_("citizen_reports").insert(report_data).execute()
             # Validate insert result
-            if not result or not result.data or len(result.data) == 0:
+            if not result or not result.data:
                 error_msg = f"Database insert returned no data. Status: {getattr(result, 'status_code', 'unknown')}"
                 logger.error(error_msg)
                 raise HTTPException(
@@ -452,9 +452,11 @@ async def submit_citizen_report(
                     detail="Failed to store report in database. Please try again."
                 )
             logger.info(f"Citizen report created: {tracking_id} (PII encrypted)")
+        except HTTPException:
+            raise
         except Exception as e:
             error_msg = f"Failed to insert citizen report: {str(e)}"
-            logger.error(error_msg)
+            logger.error(error_msg, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to submit report. Please try again later."
