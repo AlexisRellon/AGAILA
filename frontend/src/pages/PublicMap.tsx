@@ -18,22 +18,23 @@ import { FilterPanel } from '../components/filters/FilterPanel';
 import { BoundaryLayer } from '../components/map/BoundaryLayer';
 import { ReportGenerator } from '../components/reports/ReportGenerator';
 import { useHazardFilters } from '../hooks/useHazardFilters';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-  Menu,
-  X,
-  Search,
-  ChevronLeft,
-  ChevronUp,
-  ChevronDown,
-  MapPin,
-  ExternalLink,
-  RefreshCw,
-  Layers,
-  Map as MapIcon,
-  Settings,
-  FileText,
-  AlertTriangle,
-} from 'lucide-react';
+  faBars, 
+  faTimes, 
+  faSearch, 
+  faChevronLeft, 
+  faChevronUp, 
+  faChevronDown,
+  faMapPin, 
+  faExternalLinkAlt, 
+  faRotateRight, 
+  faLayerGroup, 
+  faMap, 
+  faCog, 
+  faFile, 
+  faExclamationTriangle,
+} from '@fortawesome/free-solid-svg-icons';
 import { 
   HAZARD_ICON_REGISTRY, 
   HazardIcon,
@@ -155,6 +156,8 @@ const SearchController: React.FC<{
   const map = useMap();
   const previousLocationRef = useRef<{ lat: number; lon: number } | null>(null);
   const hasFlownRef = useRef(false);
+  // Track whether an animation is in progress to ignore events during animation
+  const isAnimatingRef = useRef(false);
 
   useEffect(() => {
     // Only fly to location if following is enabled
@@ -163,6 +166,9 @@ const SearchController: React.FC<{
          previousLocationRef.current.lat !== location.lat || 
          previousLocationRef.current.lon !== location.lon ||
          !hasFlownRef.current)) {
+      
+      // Mark that animation is in progress
+      isAnimatingRef.current = true;
       
       // If we have boundary bounds, use fitBounds for better UX
       if (bounds) {
@@ -191,6 +197,13 @@ const SearchController: React.FC<{
       // Update the ref to track this location
       previousLocationRef.current = location;
       hasFlownRef.current = true;
+      
+      // Clear animation flag when moveend fires
+      const handleMoveEnd = () => {
+        isAnimatingRef.current = false;
+        map.off('moveend', handleMoveEnd);
+      };
+      map.on('moveend', handleMoveEnd);
     }
   }, [location, bounds, boundaryLevel, map, isFollowing]);
 
@@ -201,7 +214,7 @@ const SearchController: React.FC<{
     const handleUserInteraction = () => {
       // Only disable following if user manually moved the map
       // (not during the initial flyTo animation)
-      if (hasFlownRef.current) {
+      if (hasFlownRef.current && !isAnimatingRef.current) {
         onStopFollowing();
       }
     };
@@ -519,7 +532,7 @@ const PublicMap: React.FC = () => {
                 aria-expanded={isSidebarOpen}
                 aria-controls="sidebar-filters"
               >
-                <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" aria-hidden="true" />
+                <FontAwesomeIcon icon={faTimes} className="text-base sm:text-lg text-gray-600" aria-hidden="true" />
               </button>
             </div>
           </header>
@@ -531,7 +544,7 @@ const PublicMap: React.FC = () => {
               <label htmlFor="location-search" className="sr-only">Search for a location in the Philippines</label>
               <div className="relative" role="search">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                  <Search className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                  <FontAwesomeIcon icon={faSearch} className="text-base text-gray-400" aria-hidden="true" />
                 </div>
                 <input
                   id="location-search"
@@ -563,9 +576,9 @@ const PublicMap: React.FC = () => {
                   disabled={isSearching}
                 >
                   {isSearching ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" aria-hidden="true" />
+                    <FontAwesomeIcon icon={faRotateRight} className="text-base animate-spin" aria-hidden="true" />
                   ) : (
-                    <Search className="w-5 h-5" aria-hidden="true" />
+                    <FontAwesomeIcon icon={faSearch} className="text-base" aria-hidden="true" />
                   )}
                 </button>
                 
@@ -584,7 +597,7 @@ const PublicMap: React.FC = () => {
                           className="w-full text-left px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
                         >
                           <div className="flex items-start gap-3">
-                            <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
+                            <FontAwesomeIcon icon={faMapPin} className="text-sm text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">
                                 {suggestion.display_name.split(',')[0]}
@@ -609,7 +622,7 @@ const PublicMap: React.FC = () => {
                   className="mt-3 w-full px-4 py-2.5 bg-amber-50 border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1"
                   aria-live="polite"
                 >
-                  <X className="w-4 h-4" aria-hidden="true" />
+                  <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
                   Stop Following Location
                 </button>
               )}
@@ -678,10 +691,10 @@ const PublicMap: React.FC = () => {
           aria-controls="sidebar-filters"
         >
           {isSidebarOpen ? (
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700 group-hover:text-[#0a2a4d]" aria-hidden="true" />
+            <FontAwesomeIcon icon={faChevronLeft} className="text-base sm:text-lg text-gray-700 group-hover:text-[#0a2a4d]" aria-hidden="true" />
           ) : (
             <>
-              <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700 group-hover:text-[#0a2a4d]" aria-hidden="true" />
+              <FontAwesomeIcon icon={faBars} className="text-base sm:text-lg text-gray-700 group-hover:text-[#0a2a4d]" aria-hidden="true" />
               <span className="sr-only sm:not-sr-only sm:ml-2 sm:text-sm sm:font-medium sm:text-gray-700 sm:group-hover:text-[#0a2a4d]">
                 Filters
               </span>
@@ -717,8 +730,8 @@ const PublicMap: React.FC = () => {
               data-map-control="true"
             >
               {isMobileControlsOpen
-                ? <X className="w-5 h-5 text-gray-700" aria-hidden="true" />
-                : <Layers className="w-5 h-5 text-gray-700" aria-hidden="true" />
+                ? <FontAwesomeIcon icon={faTimes} className="text-base text-gray-700" aria-hidden="true" />
+                : <FontAwesomeIcon icon={faLayerGroup} className="text-base text-gray-700" aria-hidden="true" />
               }
             </button>
           )}
@@ -746,7 +759,7 @@ const PublicMap: React.FC = () => {
                   }}
                   triggerButton={
                     <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
-                      <FileText className="w-4 h-4" />
+                      <FontAwesomeIcon icon={faFile} className="text-xs" />
                       Generate Report
                     </button>
                   }
@@ -776,9 +789,9 @@ const PublicMap: React.FC = () => {
                     aria-label={isLegendVisible ? 'Collapse legend' : 'Expand legend'}
                   >
                     {isLegendVisible ? (
-                      <ChevronUp className="w-4 h-4 text-gray-500" aria-hidden="true" />
+                      <FontAwesomeIcon icon={faChevronUp} className="text-xs text-gray-500" aria-hidden="true" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-gray-500" aria-hidden="true" />
+                      <FontAwesomeIcon icon={faChevronDown} className="text-xs text-gray-500" aria-hidden="true" />
                     )}
                   </button>
                 </div>
@@ -838,7 +851,7 @@ const PublicMap: React.FC = () => {
               <div className="flex items-center justify-between" data-tour="cluster-section">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-blue-50 rounded-md">
-                    <Layers className="w-4 h-4 text-blue-600" aria-hidden="true" />
+                    <FontAwesomeIcon icon={faLayerGroup} className="text-xs text-blue-600" aria-hidden="true" />
                   </div>
                   <span id="clustering-label" className="text-sm font-medium text-gray-700">
                     Clustering
@@ -875,8 +888,9 @@ const PublicMap: React.FC = () => {
               <div className="flex items-center justify-between" data-tour="heatmap-section">
                 <div className="flex items-center gap-2">
                   <div className={`p-1.5 rounded-md ${currentZoom > heatmapSettings.maxZoom ? 'bg-gray-100' : 'bg-orange-50'}`}>
-                    <MapIcon 
-                      className={`w-4 h-4 ${currentZoom > heatmapSettings.maxZoom ? 'text-gray-400' : 'text-orange-600'}`} 
+                    <FontAwesomeIcon 
+                      className={`text-xs ${currentZoom > heatmapSettings.maxZoom ? 'text-gray-400' : 'text-orange-600'}`}
+                      icon={faMap} 
                       aria-hidden="true" 
                     />
                   </div>
@@ -928,7 +942,7 @@ const PublicMap: React.FC = () => {
                 className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 transition-colors pt-1"
                 aria-expanded={showSettings}
               >
-                <Settings className="w-3.5 h-3.5" aria-hidden="true" />
+                <FontAwesomeIcon icon={faCog} className="text-xs" aria-hidden="true" />
                 <span>{showSettings ? 'Hide settings' : 'Heatmap settings'}</span>
               </button>
 
@@ -979,7 +993,7 @@ const PublicMap: React.FC = () => {
             >
               <Alert variant="destructive" className="bg-red-50 border-red-300 shadow-lg">
                 <div className="flex items-start space-x-3">
-                  <AlertTriangle className="h-5 w-5 mt-0.5 text-red-600 shrink-0" aria-hidden="true" />
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-base mt-0.5 text-red-600 shrink-0" aria-hidden="true" />
                   <div>
                     <p className="text-red-800 font-medium">Error Loading Data</p>
                     <p className="text-red-700 text-sm mt-1">{queryError?.message || 'Failed to load hazard data. Please try again later.'}</p>
@@ -1166,7 +1180,7 @@ const PublicMap: React.FC = () => {
 
             {/* Last Updated & Auto-refresh */}
             <div className="flex items-center gap-2 text-gray-500">
-              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <FontAwesomeIcon icon={faRotateRight} className="text-xs" aria-hidden="true" />
               <span>
                 Updated: {lastUpdated.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -1180,9 +1194,9 @@ const PublicMap: React.FC = () => {
               className="flex items-center gap-1.5 text-[#005a9c] hover:text-[#003d66] font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-[#005a9c] focus:ring-offset-2 rounded px-2 py-1 -mx-2 transition-colors"
               aria-label="Report a hazard - opens citizen report form"
             >
-              <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+              <FontAwesomeIcon icon={faExclamationTriangle} className="text-xs" aria-hidden="true" />
               <span>Report a Hazard</span>
-              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+              <FontAwesomeIcon icon={faExternalLinkAlt} className="text-[0.65rem]" aria-hidden="true" />
             </Link>
             <Link
               to="/track"
@@ -1190,7 +1204,7 @@ const PublicMap: React.FC = () => {
               aria-label="Track report status page"
             >
               <span>Track Report</span>
-              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+              <FontAwesomeIcon icon={faExternalLinkAlt} className="text-[0.65rem]" aria-hidden="true" />
             </Link>
           </div>
         </div>

@@ -21,7 +21,8 @@
  */
 
 import React from 'react';
-import { X, RotateCcw } from 'lucide-react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTimes, faRotateLeft } from '@fortawesome/free-solid-svg-icons';
 import { Badge } from '../ui/badge';
 import { HazardTypeFilter } from './HazardTypeFilter';
 import { TimeWindowFilter } from './TimeWindowFilter';
@@ -140,7 +141,7 @@ export function FilterPanel({
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               aria-label="Clear filters"
             >
-              <RotateCcw className="w-3 h-3" aria-hidden="true" />
+              <FontAwesomeIcon icon={faRotateLeft} className="text-xs" aria-hidden="true" />
               Clear Filters
             </button>
           )}
@@ -193,7 +194,7 @@ export function FilterPanel({
                   }
                   className="ml-1.5 inline-flex hover:bg-blue-200 rounded-full p-0.5 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400"
                 >
-                  <X className="w-3 h-3" aria-hidden="true" />
+                  <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
                 </button>
               </Badge>
             </li>
@@ -217,7 +218,7 @@ export function FilterPanel({
                   onClick={() => updateFilters({ timeWindow: 'all', customDateRange: undefined })}
                   className="ml-1.5 inline-flex hover:bg-blue-200 rounded-full p-0.5 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400"
                 >
-                  <X className="w-3 h-3" aria-hidden="true" />
+                  <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
                 </button>
               </Badge>
             </li>
@@ -247,7 +248,7 @@ export function FilterPanel({
                 }
                 className="ml-1.5 inline-flex hover:bg-blue-200 rounded-full p-0.5 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400"
               >
-                <X className="w-3 h-3" aria-hidden="true" />
+                <FontAwesomeIcon icon={faTimes} className="text-xs" aria-hidden="true" />
               </button>
               </Badge>
             </li>

@@ -112,7 +112,7 @@ export function HazardInfoPanel({
 
   // Implement focus trap
   useEffect(() => {
-    if (!isOpen || !panelRef.current || !hazard) return;
+    if (!isOpen || !panelRef.current) return;
 
     // Save the previously focused element
     previousFocusRef.current = document.activeElement as HTMLElement;
@@ -124,7 +124,7 @@ export function HazardInfoPanel({
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
 
-    // Focus the first element when panel opens
+    // Focus the first element when panel opens, or fall back to close button if no hazard
     if (firstElement) {
       firstElement.focus();
     }
@@ -267,9 +267,9 @@ export function HazardInfoPanel({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 capitalize">
-                  {hazard ? hazard.hazard_type.replace(/_/g, ' ') : 'Loading...'}
+                  {hazard ? hazard.hazard_type.replace(/_/g, ' ') : 'No hazard selected'}
                 </h2>
-                <p className="text-sm text-gray-600 mt-1">{hazard ? hazard.location_name : '—'}</p>
+                <p className="text-sm text-gray-600 mt-1">{hazard ? hazard.location_name : 'No hazard selected'}</p>
               </div>
             </div>
             <button
