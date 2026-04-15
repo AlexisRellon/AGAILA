@@ -157,7 +157,7 @@ export function useRealtimeHazards() {
 
   useEffect(() => {
     // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
+    if (channelRef.current?.state === 'SUBSCRIBED') {
       // eslint-disable-next-line no-console
       console.log('[Realtime] Already subscribed to hazards:validated');
       return () => {
@@ -356,8 +356,8 @@ export function useRealtimeRSSFeeds() {
   const { userProfile } = useAuth();
   const channelRef = useRef<RealtimeChannel | null>(null);
   
-  // Only subscribe if user is admin (using userProfile role from database, not Auth user role)
-  const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'validator';
+  // Only subscribe if user is admin (master_admin role can manage RSS feeds)
+  const isAdmin = userProfile?.role === 'master_admin';
 
   useEffect(() => {
     if (!isAdmin) {
@@ -367,7 +367,7 @@ export function useRealtimeRSSFeeds() {
     }
 
     // Prevent duplicate subscriptions
-    if (channelRef.current?.state === 'joined') {
+    if (channelRef.current?.state === 'SUBSCRIBED') {
       // eslint-disable-next-line no-console
       console.log('[Realtime] Already subscribed to rss:feeds');
       return;
@@ -377,9 +377,12 @@ export function useRealtimeRSSFeeds() {
       try {
         // Set auth token for private channel
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          await supabase.realtime.setAuth(session.access_token);
+        if (!session?.access_token) {
+          // eslint-disable-next-line no-console
+          console.log('[Realtime] No active session; skipping RSS feed subscription');
+          return;
         }
+        await supabase.realtime.setAuth(session.access_token);
 
         const channel = supabase
           .channel('rss:feeds')
