@@ -144,6 +144,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [metadata, setMetadata] = useState<ImageMetadata | null>(null);
@@ -174,6 +175,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
 
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
+    setWarning(null);
     setMetadata(null);
 
     // Validate file
@@ -183,9 +185,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
       return;
     }
 
-    // Warn about HEIC/HEIF support limitations
+    // Warn about HEIC/HEIF support limitations (separate from error state)
     if (HEIC_HEIF_TYPES.includes(file.type)) {
-      setError('HEIC/HEIF images may not preview in all browsers. Please use JPEG or PNG for best compatibility.');
+      setWarning('HEIC/HEIF images may not preview in all browsers. Please use JPEG or PNG for best compatibility.');
     }
 
     // Create preview URL
@@ -225,6 +227,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
     setSelectedFile(null);
     setPreviewUrl(null);
     setError(null);
+    setWarning(null);
     setMetadata(null);
     onFileSelect(undefined);
     
@@ -342,6 +345,14 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onFileSelect, disabled = fals
                 </span>
               </p>
             )}
+          </div>
+        )}
+
+        {/* Warning Display (non-error) */}
+        {warning && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm flex items-start gap-2">
+            <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-amber-800">{warning}</p>
           </div>
         )}
       </div>

@@ -54,7 +54,7 @@ class ReportSubmissionResponse(BaseModel):
     """Response after successful report submission"""
     tracking_id: str = Field(..., description="Unique tracking ID for the report")
     message: str = Field(..., description="Confirmation message")
-    status: str = Field(default="pending_verification", description="Initial status")
+    status: str = Field(default="unverified", description="Initial status")
     submitted_at: datetime = Field(..., description="Timestamp of submission")
 
 
@@ -309,8 +309,11 @@ async def submit_citizen_report(
     if image and image.filename:
         try:
             # Security: Validate file type and extension
-            ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif', 'heic', 'heif'}
-            ALLOWED_MIME_TYPES = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/jfif', 'image/heic', 'image/heif'}
+            # Note: JFIF files are identified as image/jpeg (JFIF is a JPEG variant)
+            # Removed non-IANA 'image/jfif' MIME type; JPEG/JFIF files use 'image/jpeg'
+            # HEIC/HEIF disabled in production due to known parser vulnerabilities
+            ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif'}
+            ALLOWED_MIME_TYPES = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'}
             
             # Validate MIME type
             if image.content_type and image.content_type not in ALLOWED_MIME_TYPES:
@@ -437,9 +440,25 @@ async def submit_citizen_report(
         logger.info("Encrypting PII fields for storage")
         report_data = encrypt_pii_fields(report_data)
         
-        supabase.schema("gaia").from_("citizen_reports").insert(report_data).execute()
-        
-        logger.info(f"Citizen report created: {tracking_id} (PII encrypted)")
+        # Insert report and validate result
+        try:
+            result = supabase.schema("gaia").from_("citizen_reports").insert(report_data).execute()
+            # Validate insert result
+            if not result or not result.data or len(result.data) == 0:
+                error_msg = f"Database insert returned no data. Status: {getattr(result, 'status_code', 'unknown')}"
+                logger.error(error_msg)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to store report in database. Please try again."
+                )
+            logger.info(f"Citizen report created: {tracking_id} (PII encrypted)")
+        except Exception as e:
+            error_msg = f"Failed to insert citizen report: {str(e)}"
+            logger.error(error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to submit report. Please try again later."
+            )
         # Log public submission activity (anonymous user)
         # Note: Do NOT log actual PII values, only metadata
         try:
