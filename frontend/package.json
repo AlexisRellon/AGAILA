@@ -76,7 +76,7 @@
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.heat": "^0.2.2",
     "@types/react-google-recaptcha": "^2.1.9",
-    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^6.14.0",
     "autoprefixer": "^10.4.16",
     "cross-env": "^7.0.3",
