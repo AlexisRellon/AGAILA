@@ -343,8 +343,6 @@ export function useRealtimeRSSFeeds() {
 
   useEffect(() => {
     if (!isAdmin) {
-      // eslint-disable-next-line no-console
-      console.log('[Realtime] Skipping RSS feed subscription (not admin)');
       return;
     }
 

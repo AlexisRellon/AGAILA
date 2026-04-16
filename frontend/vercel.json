@@ -1,11 +1,12 @@
 {
   "version": 2,
+  "framework": "create-react-app",
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://gaia-production-2294.up.railway.app/api/:path*"
+      "destination": "https://agaila.me/api/:path*"
     },
     {
       "source": "/(.*)",

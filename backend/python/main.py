@@ -150,28 +150,36 @@ ENV = os.getenv("ENV", "development")
 # Configure CORS with environment-based whitelist
 # Support for Vercel + Railway deployment, localhost development, and future custom domains
 if ENV == "production":
-    # Production: Vercel frontend + Railway backend domains
-    default_origins = "https://*.vercel.app,https://*.railway.app,https://gaia.vercel.app,https://gaia.railway.app"
+    # Production: Explicit Vercel frontend + Digital Ocean backend domains
+    # NOTE: CORSMiddleware does NOT support glob patterns (*.vercel.app) in allow_origins list.
+    # Also, allow_origins=["*"] with allow_credentials=True is forbidden by the CORS spec.
+    # Use allow_origin_regex for wildcard subdomain matching instead.
+    default_origins = "https://agaila-ph.vercel.app,https://agaila.me"
 else:
     # Development: localhost only
     default_origins = "http://localhost:3000,http://localhost:8000"
 
 allowed_origins_str = os.getenv("CORS_ORIGINS", default_origins)
 
-# Parse CORS origins (support wildcards for Railway subdomains)
-if "*" in allowed_origins_str:
-    # Wildcard support - validate origins at runtime
-    allowed_origins = "*"  # Allow all origins (Railway handles subdomain validation)
-else:
-    allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+# Parse CORS origins into explicit list (no glob wildcards)
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
+# Optional: regex pattern for Vercel preview deployments (*.vercel.app)
+# This allows PR preview URLs like https://gaia-abc123.vercel.app
+allowed_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://.*\.vercel\.app" if ENV == "production" else None
+)
 
 # Log CORS configuration for debugging
 logger.info(f"CORS configured for environment: {ENV}")
 logger.info(f"Allowed origins: {allowed_origins}")
+logger.info(f"Allowed origin regex: {allowed_origin_regex}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[

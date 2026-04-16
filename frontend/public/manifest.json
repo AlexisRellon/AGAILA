@@ -9,7 +9,7 @@
       "type": "image/x-icon"
     },
     {
-      "src": "public/assests/img/GAIA.png",
+      "src": "/assets/img/GAIA.png",
       "type": "image/png",
       "sizes": "192x192"
     },

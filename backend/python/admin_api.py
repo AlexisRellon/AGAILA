@@ -537,6 +537,7 @@ async def reset_user_password(
     
     **Permissions**: Master Admin only
     **Module**: UM-03 (User Profile Management)
+    **Audit**: Logs password reset to audit_logs with WARNING severity (security_event)
     """
     try:
         user_response = supabase.schema("gaia").from_("user_profiles").select("*").eq("id", user_id).execute()
@@ -566,7 +567,8 @@ async def reset_user_password(
             old_values={},
             new_values={"password_reset": True},
             request=request,
-            event_type="PASSWORD_RESET"
+            event_type="security_event",
+            severity="warning"  # Password resets are security-sensitive operations
         )
         
         logger.info(f"Master Admin {current_user.email} reset password for user: {target_user['email']}")
